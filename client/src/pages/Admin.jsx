@@ -4,6 +4,8 @@ import AdminPropertyItem from '../components/AdminPropertyItem.jsx'
 import DateRangeInputs from '../components/DateRangeInputs.jsx'
 import { supabase } from '../lib/supabase.js'
 import { requireAdmin } from '../lib/supabaseAuth.js'
+import Modal from '../components/Modal.jsx'
+import { useToast } from '../components/ToastProvider.jsx'
 
 function Tabs({ tabs, value, onChange }){
   return (
@@ -20,23 +22,61 @@ function Tabs({ tabs, value, onChange }){
 function Bookings(){
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
+  const [open, setOpen] = useState(false)
+  const [current, setCurrent] = useState(null)
+  const toast = useToast()
   useEffect(()=>{(async()=>{
     try{
       const { data, error } = await supabase.from('bookings').select('*').order('createdat', { ascending:false })
       setItems(Array.isArray(data)? data:[])
     } finally{ setLoading(false) }
   })()},[])
+
+  async function save(b){
+    const { id, status, paymentlink } = b || {}
+    const { error } = await supabase.from('bookings').update({ status, paymentlink }).eq('id', id)
+    if (error){ toast.error('Erreur sauvegarde: '+error.message); return }
+    toast.success('Commande mise à jour')
+    setItems(list => list.map(x => x.id===id? { ...x, status, paymentlink }: x))
+    setOpen(false)
+  }
+  function openBooking(b){ setCurrent(b); setOpen(true) }
   return (
     <section className="card" style={{padding:16}}>
       <h3>Commandes</h3>
       {loading? <div className="empty">Chargement...</div> :
         items.map(b => (
-          <div key={b.id} className="row" style={{borderBottom:'1px solid #e5e7eb',padding:'8px 0'}}>
+          <div key={b.id} className="row" style={{borderBottom:'1px solid #e5e7eb',padding:'8px 0',cursor:'pointer'}} onClick={()=>openBooking(b)}>
             <div><strong>#{String(b.id).slice(0,8)}</strong> {b.guestname} ({b.guestemail})</div>
-            <div className="small muted">{b.startdate} → {b.enddate} • {b.status}</div>
+            <div className="small muted">{b.startdate} → {b.enddate} • {(b.status==='pending'?'En attente': b.status==='paying'?'Paiement en cours': b.status==='finalized'?'Finalisée': b.status)}</div>
           </div>
         ))
       }
+      <Modal open={open} onClose={()=>setOpen(false)} title={`Commande #${String(current?.id||'').slice(0,8)}`} width={680}>
+        {current && (
+          <div className="row" style={{flexDirection:'column'}}>
+            <div className="small muted">Client</div>
+            <div><strong>{current.guestname}</strong> • {current.guestemail}</div>
+            <div className="small muted" style={{marginTop:6}}>Période</div>
+            <div>{current.startdate} → {current.enddate} • {current.guests} voyageurs</div>
+            <div className="small muted" style={{marginTop:6}}>Total</div>
+            <div><strong>{current.total} €</strong></div>
+            <hr style={{opacity:.2, width:'100%'}}/>
+            <div className="row">
+              <select className="input" value={current.status} onChange={e=>setCurrent(c=>({...c,status:e.target.value}))}>
+                <option value="pending">En attente</option>
+                <option value="paying">Paiement en cours</option>
+                <option value="finalized">Finalisé</option>
+              </select>
+              <input className="input" placeholder="Lien de paiement" value={current.paymentlink||''} onChange={e=>setCurrent(c=>({...c,paymentlink:e.target.value}))} />
+              <button className="btn" onClick={()=>save(current)}>Enregistrer</button>
+            </div>
+            <div className="row">
+              <button className="btn" onClick={()=>{ if(!current.paymentlink){ toast.error('Ajoutez un lien'); return } toast.success('Lien de paiement prêt à être envoyé'); }}>Envoyer lien de paiement</button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </section>
   )
 }
@@ -44,23 +84,60 @@ function Bookings(){
 function Payments(){
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
+  const [open, setOpen] = useState(false)
+  const [current, setCurrent] = useState(null)
+  const toast = useToast()
   useEffect(()=>{(async()=>{
     try{
       const { data, error } = await supabase.from('bookings').select('*').eq('status','pending').order('createdat',{ascending:false})
       setItems(Array.isArray(data)? data:[])
     } finally{ setLoading(false) }
   })()},[])
+  async function save(b){
+    const { id, status, paymentlink } = b || {}
+    const { error } = await supabase.from('bookings').update({ status, paymentlink }).eq('id', id)
+    if (error){ toast.error('Erreur sauvegarde: '+error.message); return }
+    toast.success('Commande mise à jour')
+    setItems(list => list.map(x => x.id===id? { ...x, status, paymentlink }: x))
+    setOpen(false)
+  }
+  function openBooking(b){ setCurrent(b); setOpen(true) }
   return (
     <section className="card" style={{padding:16}}>
       <h3>Paiements</h3>
       {loading? <div className="empty">Chargement...</div> :
         items.map(b => (
-          <div key={b.id} className="row" style={{borderBottom:'1px solid #e5e7eb',padding:'8px 0'}}>
+          <div key={b.id} className="row" style={{borderBottom:'1px solid #e5e7eb',padding:'8px 0',cursor:'pointer'}} onClick={()=>openBooking(b)}>
             <div><strong>#{String(b.id).slice(0,8)}</strong> {b.guestname} ({b.guestemail})</div>
-            <div className="small muted">{b.startdate} → {b.enddate} • {b.status}</div>
+            <div className="small muted">{b.startdate} → {b.enddate} • {(b.status==='pending'?'En attente': b.status==='paying'?'Paiement en cours': b.status==='finalized'?'Finalisée': b.status)}</div>
           </div>
         ))
       }
+      <Modal open={open} onClose={()=>setOpen(false)} title={`Commande #${String(current?.id||'').slice(0,8)}`} width={680}>
+        {current && (
+          <div className="row" style={{flexDirection:'column'}}>
+            <div className="small muted">Client</div>
+            <div><strong>{current.guestname}</strong> • {current.guestemail}</div>
+            <div className="small muted" style={{marginTop:6}}>Période</div>
+            <div>{current.startdate} → {current.enddate} • {current.guests} voyageurs</div>
+            <div className="small muted" style={{marginTop:6}}>Total</div>
+            <div><strong>{current.total} €</strong></div>
+            <hr style={{opacity:.2, width:'100%'}}/>
+            <div className="row">
+              <select className="input" value={current.status} onChange={e=>setCurrent(c=>({...c,status:e.target.value}))}>
+                <option value="pending">En attente</option>
+                <option value="paying">Paiement en cours</option>
+                <option value="finalized">Finalisé</option>
+              </select>
+              <input className="input" placeholder="Lien de paiement" value={current.paymentlink||''} onChange={e=>setCurrent(c=>({...c,paymentlink:e.target.value}))} />
+              <button className="btn" onClick={()=>save(current)}>Enregistrer</button>
+            </div>
+            <div className="row">
+              <button className="btn" onClick={()=>{ if(!current.paymentlink){ toast.error('Ajoutez un lien'); return } toast.success('Lien de paiement prêt à être envoyé'); }}>Envoyer lien de paiement</button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </section>
   )
 }

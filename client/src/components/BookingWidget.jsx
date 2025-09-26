@@ -17,20 +17,20 @@ export default function BookingWidget({ property, onBooked }){
   const [loading, setLoading] = useState(false)
   const calRef = useRef(null)
 
-  useEffect(()=>{
-    (async ()=>{
-      try{
-        const [{ data: bookings }, { data: unav }] = await Promise.all([
-          supabase.from('bookings').select('startdate,enddate,status').eq('propertyid', property.id).in('status', ['pending','confirmed']),
-          supabase.from('availability').select('id,startdate,enddate').eq('propertyid', property.id)
-        ])
-        const arr = []
-        ;(bookings||[]).forEach(b=> arr.push({ startDate: b.startdate, endDate: b.enddate, source:'booking' }))
-        ;(unav||[]).forEach(r=> arr.push({ id: r.id, startDate: r.startdate, endDate: r.enddate, source:'unavailable' }))
-        setRanges(arr)
-      }catch{ setRanges([]) }
-    })()
-  }, [property.id])
+  async function loadRanges(){
+    try{
+      const [{ data: bookings }, { data: unav }] = await Promise.all([
+        supabase.from('bookings').select('startdate,enddate,status').eq('propertyid', property.id).in('status', ['pending','confirmed']),
+        supabase.from('availability').select('id,startdate,enddate').eq('propertyid', property.id)
+      ])
+      const arr = []
+      ;(bookings||[]).forEach(b=> arr.push({ startDate: b.startdate, endDate: b.enddate, source:'booking' }))
+      ;(unav||[]).forEach(r=> arr.push({ id: r.id, startDate: r.startdate, endDate: r.enddate, source:'unavailable' }))
+      setRanges(arr)
+    }catch{ setRanges([]) }
+  }
+
+  useEffect(()=>{ loadRanges() }, [property.id])
 
   useEffect(()=>{
     if (!calRef.current) return
@@ -66,6 +66,9 @@ export default function BookingWidget({ property, onBooked }){
 
   async function submit(e){
     e.preventDefault()
+    // must be logged in
+    const { data: auth } = await supabase.auth.getUser()
+    if (!auth?.user){ toast.error('Veuillez vous connecter pour réserver'); return }
     if (!start || !end){ toast.error('Sélectionnez une période'); return }
     // hard-guard client-side window
     if (property.availableFrom && property.availableTo){
@@ -94,6 +97,8 @@ export default function BookingWidget({ property, onBooked }){
       onBooked?.()
       setFirstName(''); setLastName(''); setGuestEmail(''); setPhone(''); setGuests(1); setStart(''); setEnd('')
       toast.success('Réservation créée !')
+      // refresh calendar to reflect new blocked dates
+      await loadRanges()
     }catch(e){ toast.error(e.message) }
     finally{ setLoading(false) }
   }
