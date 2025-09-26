@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { supabase, adminEmail } from '../lib/supabase.js'
+import { signInAdmin } from '../lib/supabaseAuth.js'
 
 export default function AdminLogin(){
   const [email, setEmail] = useState('')
@@ -12,14 +12,7 @@ export default function AdminLogin(){
     setLoading(true)
     setError('')
     try{
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-      if (error) throw error
-      const user = data?.user
-      const u = user?.email?.trim().toLowerCase()
-      const a = (adminEmail||'').trim().toLowerCase()
-      if (u !== a){
-        throw new Error("Cet utilisateur n'est pas autorisé en tant qu'admin")
-      }
+      await signInAdmin(email, password)
       window.location.href = '/admin'
     }catch(e){ setError(e.message) }
     finally{ setLoading(false) }

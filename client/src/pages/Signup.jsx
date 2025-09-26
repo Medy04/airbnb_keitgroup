@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { supabase } from '../lib/supabase.js'
 
 export default function Signup(){
   const [email, setEmail] = useState('')
@@ -13,10 +14,14 @@ export default function Signup(){
     setError('')
     setInfo('')
     try{
-      const r = await fetch('/signup', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body: new URLSearchParams({ email, password }) })
-      const html = await r.text()
-      if (!r.ok) throw new Error('Erreur lors de la création')
-      setInfo("Un email de confirmation vous a été envoyé par Supabase. Merci de cliquer sur le lien pour activer votre compte.")
+      const { data, error } = await supabase.auth.signUp({ email, password })
+      if (error) throw error
+      if (data?.user && !data?.session){
+        // Email confirmation required
+        setInfo("Un email de confirmation vous a été envoyé par Supabase. Merci de cliquer sur le lien pour activer votre compte.")
+      } else {
+        setInfo("Compte créé et connecté. Vous pouvez maintenant réserver.")
+      }
     }catch(e){ setError(e.message) }
     finally{ setLoading(false) }
   }

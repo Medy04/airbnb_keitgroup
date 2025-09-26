@@ -3,6 +3,7 @@ import InlineCalendar from './InlineCalendar.jsx'
 import { IconBuilding } from '@tabler/icons-react'
 import BookingWidget from './BookingWidget.jsx'
 import { supabase } from '../lib/supabase.js'
+import Modal from './Modal.jsx'
 
 export default function PropertyCard({ p }){
   const [ranges, setRanges] = useState(null)
@@ -44,14 +45,14 @@ export default function PropertyCard({ p }){
             <button className="btn" onClick={()=>setOpenCal(v=>!v)}>{openCal? 'Masquer calendrier':'Voir calendrier'}</button>
           </div>
         </div>
-        {openCal && (
-          <div style={{marginTop:10}}>
+        <Modal open={openCal} onClose={()=>setOpenCal(false)} title={`Calendrier • ${p.title}`} width={780}>
+          <div>
             <InlineCalendar ranges={ranges||[]} />
             <div style={{marginTop:10}}>
               <BookingWidget property={p} onBooked={()=>{}} />
             </div>
           </div>
-        )}
+        </Modal>
       </div>
     </article>
   )

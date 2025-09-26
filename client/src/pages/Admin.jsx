@@ -3,6 +3,7 @@ import { IconListDetails, IconCreditCard, IconBuilding } from '@tabler/icons-rea
 import AdminPropertyItem from '../components/AdminPropertyItem.jsx'
 import DateRangeInputs from '../components/DateRangeInputs.jsx'
 import { supabase } from '../lib/supabase.js'
+import { requireAdmin } from '../lib/supabaseAuth.js'
 
 function Tabs({ tabs, value, onChange }){
   return (
@@ -20,7 +21,10 @@ function Bookings(){
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   useEffect(()=>{(async()=>{
-    try{ const r = await fetch('/api/bookings'); const j = await r.json(); setItems(Array.isArray(j)? j:[]) } finally{ setLoading(false) }
+    try{
+      const { data, error } = await supabase.from('bookings').select('*').order('createdAt', { ascending:false })
+      setItems(Array.isArray(data)? data:[])
+    } finally{ setLoading(false) }
   })()},[])
   return (
     <section className="card" style={{padding:16}}>
@@ -41,7 +45,10 @@ function Payments(){
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   useEffect(()=>{(async()=>{
-    try{ const r = await fetch('/api/bookings'); const j = await r.json(); const arr = Array.isArray(j)? j.filter(x=>x.status==='pending'):[]; setItems(arr) } finally{ setLoading(false) }
+    try{
+      const { data, error } = await supabase.from('bookings').select('*').eq('status','pending').order('createdAt',{ascending:false})
+      setItems(Array.isArray(data)? data:[])
+    } finally{ setLoading(false) }
   })()},[])
   return (
     <section className="card" style={{padding:16}}>
@@ -150,6 +157,9 @@ function Properties(){
 
 export default function Admin(){
   const [tab, setTab] = useState('bookings')
+  useEffect(()=>{
+    requireAdmin().catch(()=>{ window.location.href = '/admin-login' })
+  },[])
   const tabs = [
     { id:'bookings', label:'Commandes', icon:<IconListDetails size={18}/> },
     { id:'payments', label:'Paiements', icon:<IconCreditCard size={18}/> },
