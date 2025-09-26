@@ -1,0 +1,31 @@
+<h1 class="page-title"><%= typeof title !== 'undefined' ? title : 'Mes réservations' %></h1>
+
+<% if (!bookings || !bookings.length) { %>
+  <div class="empty">Aucune réservation pour le moment.</div>
+<% } %>
+
+<div class="grid">
+  <% (bookings || []).forEach(b => { %>
+    <div class="card">
+      <div class="card-body">
+        <div class="row between">
+          <div><strong>Réservation #<%= b.id %></strong></div>
+          <div>
+            <span class="badge <%= b.status %>"><%= b.status %></span>
+          </div>
+        </div>
+        <div class="row">
+          <div>Période: <strong><%= b.startDate %></strong> ➜ <strong><%= b.endDate %></strong></div>
+        </div>
+        <div class="row">
+          <div>Total: <strong><%= b.total %> €</strong></div>
+        </div>
+        <% if (b.paymentLink) { %>
+          <div class="row">
+            <a class="btn" href="<%= b.paymentLink %>" target="_blank" rel="noopener">Payer avec Revolut</a>
+          </div>
+        <% } %>
+      </div>
+    </div>
+  <% }) %>
+</div>

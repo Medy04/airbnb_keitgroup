@@ -1,0 +1,25 @@
+{
+  "properties": [
+    {
+      "id": "demo1",
+      "title": "Studio cosy centre-ville",
+      "description": "Studio moderne et lumineux, parfait pour un court séjour.",
+      "address": "10 Rue de Paris, 75000 Paris",
+      "pricePerNight": 75,
+      "imageUrl": "https://images.unsplash.com/photo-1505691723518-36a5ac3b2a59?q=80&w=1200&auto=format&fit=crop",
+      "capacity": 2,
+      "createdAt": "2025-01-01T00:00:00.000Z"
+    },
+    {
+      "id": "demo2",
+      "title": "Appartement familial",
+      "description": "Grand appartement avec balcon, idéal pour familles.",
+      "address": "25 Avenue des Champs, 69000 Lyon",
+      "pricePerNight": 120,
+      "imageUrl": "https://images.unsplash.com/photo-1523217582562-09d0def993a6?q=80&w=1200&auto=format&fit=crop",
+      "capacity": 4,
+      "createdAt": "2025-01-01T00:00:00.000Z"
+    }
+  ],
+  "bookings": []
+}

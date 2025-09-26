@@ -1,0 +1,11 @@
+<h1 class="page-title"><%= typeof title !== 'undefined' ? title : 'Admin - Connexion' %></h1>
+<form method="post" action="/admin/login" class="card" style="padding:16px;max-width:420px">
+  <% if (typeof error !== 'undefined' && error) { %>
+    <div class="empty" style="margin-bottom:10px;color:#fecaca;border-color:#7f1d1d"> <%= error %> </div>
+  <% } %>
+  <div class="row">
+    <input class="input" name="email" type="email" placeholder="Email admin" required />
+    <input class="input" name="password" type="password" placeholder="Mot de passe" required />
+  </div>
+  <button class="btn">Se connecter</button>
+</form>

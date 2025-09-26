@@ -1,0 +1,52 @@
+<div class="admin-layout">
+  <aside class="sidebar">
+    <div class="sidebar-title">Admin</div>
+    <nav class="sidebar-nav">
+      <button class="tab active" data-tab="bookings"><i class="ti ti-list-details"></i> Commandes</button>
+      <button class="tab" data-tab="payments"><i class="ti ti-credit-card"></i> Paiements</button>
+      <button class="tab" data-tab="properties"><i class="ti ti-building"></i> Logements</button>
+    </nav>
+  </aside>
+  <section class="content">
+    <h1 class="page-title"><%= typeof title !== 'undefined' ? title : 'Espace Admin' %></h1>
+
+    <section class="tab-panel active" id="tab-bookings">
+      <h3>Commandes</h3>
+      <div id="bookings-list"></div>
+    </section>
+
+    <section class="tab-panel" id="tab-payments">
+      <h3>Paiements (en attente)</h3>
+      <div id="payments-list"></div>
+    </section>
+
+    <section class="tab-panel" id="tab-properties">
+      <h3>Logements</h3>
+      <form id="add-property-form" onsubmit="return addProperty(event)" class="card" style="padding:12px">
+        <div class="row">
+          <input class="input" name="title" placeholder="Titre" required />
+          <input class="input" name="pricePerNight" placeholder="Prix/nuit (€)" type="number" min="0" required />
+          <input class="input" name="capacity" placeholder="Capacité" type="number" min="1" />
+        </div>
+        <div class="row">
+          <input class="input" name="address" placeholder="Adresse" />
+          <input class="input" name="imageUrl" placeholder="Image URL" />
+        </div>
+        <textarea class="input" name="description" placeholder="Description"></textarea>
+        <div class="row">
+          <input class="input" name="videoUrl" placeholder="Vidéo URL (optionnel)" />
+        </div>
+        <div class="row">
+          <input type="file" id="add-image-file" accept="image/*" />
+          <button type="button" class="btn" onclick="uploadMedia('#add-image-file','imageUrl')"><i class="ti ti-upload"></i> Uploader image</button>
+          <input type="file" id="add-video-file" accept="video/*" />
+          <button type="button" class="btn" onclick="uploadMedia('#add-video-file','videoUrl')"><i class="ti ti-upload"></i> Uploader vidéo</button>
+        </div>
+        <button class="btn">Ajouter</button>
+      </form>
+      <div id="properties-list" style="margin-top:12px"></div>
+    </section>
+  </section>
+</div>
+
+<script src="/js/admin.js"></script>

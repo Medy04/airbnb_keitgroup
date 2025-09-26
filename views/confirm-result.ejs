@@ -1,0 +1,13 @@
+<h1 class="page-title"><%= typeof title !== 'undefined' ? title : 'Confirmation' %></h1>
+<% if (typeof success !== 'undefined' && success) { %>
+  <div class="card" style="padding:16px">
+    <div class="row"><i class="ti ti-checkbox"></i> <strong><%= success %></strong></div>
+    <div class="row"><a class="btn" href="/login"><i class="ti ti-login"></i> Se connecter</a></div>
+  </div>
+<% } %>
+<% if (typeof error !== 'undefined' && error) { %>
+  <div class="card" style="padding:16px">
+    <div class="row"><i class="ti ti-alert-triangle"></i> <strong><%= error %></strong></div>
+    <div class="row"><a class="btn" href="/signup"><i class="ti ti-user-plus"></i> Revenir à l'inscription</a></div>
+  </div>
+<% } %>

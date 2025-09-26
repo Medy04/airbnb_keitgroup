@@ -1,0 +1,51 @@
+<h1 class="page-title"><%= typeof title !== 'undefined' ? title : 'Logements disponibles' %></h1>
+<div class="grid">
+  <% if (!properties.length) { %>
+    <div class="empty">Aucun logement pour le moment. Allez dans l'onglet Admin pour en ajouter.</div>
+  <% } %>
+  <% properties.forEach(p => { %>
+    <div class="card">
+      <img class="card-image" src="<%= p.imageUrl || 'https://images.unsplash.com/photo-1505692794403-34d4982f88aa?q=80&w=1200&auto=format&fit=crop' %>" alt="Image logement" />
+      <div class="card-body">
+        <h3><%= p.title %></h3>
+        <p class="muted"><%= p.address || '' %></p>
+        <p><%= p.description || '' %></p>
+        <div class="row">
+          <div>
+            <label>Arrivée</label>
+            <input type="date" class="input" id="start-<%= p.id %>" />
+          </div>
+          <div>
+            <label>Départ</label>
+            <input type="date" class="input" id="end-<%= p.id %>" />
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label>Voyageurs</label>
+            <input type="number" min="1" value="1" class="input" id="guests-<%= p.id %>" />
+          </div>
+          <div>
+            <label>Votre nom</label>
+            <input type="text" class="input" id="name-<%= p.id %>" />
+          </div>
+          <div>
+            <label>Votre email</label>
+            <% const sessEmail = (typeof session !== 'undefined' && session && session.user && session.user.email) ? session.user.email : '' %>
+            <input type="email" class="input" id="email-<%= p.id %>" value="<%= sessEmail %>" <%= sessEmail ? 'readonly' : '' %> />
+            <% if (!sessEmail) { %>
+              <div class="small muted">Astuce: connectez-vous pour pré-remplir votre email.</div>
+            <% } %>
+          </div>
+        </div>
+        <div class="row between">
+          <div class="price">
+            <span class="muted">Prix/nuit</span>
+            <strong><%= p.pricePerNight %> €</strong>
+          </div>
+          <button class="btn btn-book" data-id="<%= p.id %>" data-title="<%= p.title %>" data-price="<%= p.pricePerNight %>">Réserver</button>
+        </div>
+      </div>
+    </div>
+  <% }) %>
+</div>

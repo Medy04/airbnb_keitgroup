@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title><%= typeof title !== 'undefined' ? title : 'Kader Airbnb' %></title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://unpkg.com/@tabler/icons-webfont@latest/tabler-icons.min.css" rel="stylesheet">
+    <link href="https://unpkg.com/air-datepicker@3.5.3/air-datepicker.css" rel="stylesheet">
+    <link rel="stylesheet" href="/css/styles.css" />
+    <script src="https://cdn.jsdelivr.net/npm/dayjs@1/dayjs.min.js"></script>
+    <script src="https://unpkg.com/air-datepicker@3.5.3/air-datepicker.js"></script>
+  </head>
+  <body>
+    <header class="header">
+      <div class="container">
+        <a href="/" class="brand">
+          <img src="/logo.png" alt="Logo" class="logo" />
+          <span>Kader Airbnb</span>
+        </a>
+        <nav>
+          <a href="/"><i class="ti ti-home"></i> Accueil</a>
+          <% if (session && session.user && session.user.role === 'user') { %>
+            <a href="/mes-reservations"><i class="ti ti-calendar-stats"></i> Mes réservations</a>
+          <% } %>
+          <% if (session && session.user && session.user.role === 'admin') { %>
+            <a href="/admin"><i class="ti ti-tools"></i> Admin</a>
+          <% } %>
+          <% if (!session || !session.user) { %>
+            <a href="/login"><i class="ti ti-login"></i> Se connecter</a>
+            <a href="/admin/login"><i class="ti ti-shield-lock"></i> Admin</a>
+          <% } else { %>
+            <% if (session.user.role === 'admin') { %>
+              <a href="/admin/logout"><i class="ti ti-logout"></i> Se déconnecter</a>
+            <% } else { %>
+              <a href="/logout"><i class="ti ti-logout"></i> Se déconnecter</a>
+            <% } %>
+          <% } %>
+        </nav>
+      </div>
+    </header>
+    <main class="container">
+      <%- body %>
+    </main>
+    <div id="toast-container"></div>
+    <script src="/js/main.js"></script>
+  </body>
+</html>
