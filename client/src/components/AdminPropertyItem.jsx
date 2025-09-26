@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import AirDatepicker from 'air-datepicker'
-import fr from 'air-datepicker/locale/fr'
 import Sortable from 'sortablejs'
 import { supabase } from '../lib/supabase.js'
+import DateRangeInputs from './DateRangeInputs.jsx'
+import { useToast } from './ToastProvider.jsx'
 
 export default function AdminPropertyItem({ p, onUpdated, onDeleted }){
+  const toast = useToast()
   const [form, setForm] = useState({
     title: p.title || '',
     pricePerNight: p.pricePerNight || 0,
@@ -18,18 +19,17 @@ export default function AdminPropertyItem({ p, onUpdated, onDeleted }){
   const [loadingRanges, setLoadingRanges] = useState(true)
   const [media, setMedia] = useState([])
   const mediaListRef = useRef(null)
-  const avStartRef = useRef(null)
-  const avEndRef = useRef(null)
+  const [av, setAv] = useState({ start:'', end:'' })
 
   async function loadBlocked(){
     setLoadingRanges(true)
     const [{ data: bookings }, { data: unav }] = await Promise.all([
-      supabase.from('bookings').select('startDate,endDate,status').eq('propertyId', p.id).in('status', ['pending','confirmed']),
-      supabase.from('availability').select('id,startDate,endDate').eq('propertyId', p.id)
+      supabase.from('bookings').select('startdate,enddate,status').eq('propertyid', p.id).in('status', ['pending','confirmed']),
+      supabase.from('availability').select('id,startdate,enddate').eq('propertyid', p.id)
     ])
     const arr = []
-    ;(bookings||[]).forEach(b=> arr.push({ startDate: b.startDate, endDate: b.endDate, source:'booking' }))
-    ;(unav||[]).forEach(r=> arr.push({ id: r.id, startDate: r.startDate, endDate: r.endDate, source:'unavailable' }))
+    ;(bookings||[]).forEach(b=> arr.push({ startDate: b.startdate, endDate: b.enddate, source:'booking' }))
+    ;(unav||[]).forEach(r=> arr.push({ id: r.id, startDate: r.startdate, endDate: r.enddate, source:'unavailable' }))
     setRanges(arr)
     setLoadingRanges(false)
   }
@@ -54,14 +54,7 @@ export default function AdminPropertyItem({ p, onUpdated, onDeleted }){
     })
   }, [media])
 
-  useEffect(()=>{
-    const startEl = avStartRef.current
-    const endEl = avEndRef.current
-    if (!startEl || !endEl) return
-    const dp1 = new AirDatepicker(startEl, { autoClose:true, dateFormat:'yyyy-MM-dd', locale: fr })
-    const dp2 = new AirDatepicker(endEl, { autoClose:true, dateFormat:'yyyy-MM-dd', locale: fr })
-    return ()=>{ try{dp1.destroy()}catch{} try{dp2.destroy()}catch{} }
-  }, [p.id]) // Add p.id as a dependency
+  // Date inputs handled by DateRangeInputs component
 
   async function save(){
     const updates = {
@@ -74,51 +67,58 @@ export default function AdminPropertyItem({ p, onUpdated, onDeleted }){
       capacity: Number(form.capacity)||1,
     }
     const { error } = await supabase.from('properties').update(updates).eq('id', p.id)
-    if (error){ alert('Erreur mise à jour: '+error.message); return }
+    if (error){ toast.error('Erreur mise à jour: '+error.message); return }
+    toast.success('Logement mis à jour')
     onUpdated?.()
   }
   async function del(){
     if (!confirm('Supprimer ce logement ?')) return
     const { error } = await supabase.from('properties').delete().eq('id', p.id)
-    if (error){ alert('Erreur suppression'); return }
+    if (error){ toast.error('Erreur suppression'); return }
+    toast.success('Logement supprimé')
     onDeleted?.()
   }
 
   async function addUnavailable(){
-    const start = avStartRef.current?.value?.trim()
-    const end = avEndRef.current?.value?.trim()
-    if (!start || !end) { alert('Sélectionnez une période'); return }
-    const { error } = await supabase.from('availability').insert({ propertyId: p.id, startDate: start, endDate: end })
-    if (error){ alert('Ajout indisponible échoué: '+error.message); return }
-    avStartRef.current.value=''; avEndRef.current.value=''
+    const start = av.start?.trim()
+    const end = av.end?.trim()
+    if (!start || !end) { toast.error('Sélectionnez une période'); return }
+    const { error } = await supabase.from('availability').insert({ propertyid: p.id, startdate: start, enddate: end })
+    if (error){ toast.error('Ajout indisponible échoué: '+error.message); return }
+    toast.success('Période bloquée')
+    setAv({ start:'', end:'' })
     await loadBlocked()
   }
   async function removeUnavailable(rangeId){
-    const { error } = await supabase.from('availability').delete().eq('id', rangeId).eq('propertyId', p.id)
-    if (error){ alert('Suppression échouée'); return }
+    const { error } = await supabase.from('availability').delete().eq('id', rangeId).eq('propertyid', p.id)
+    if (error){ toast.error('Suppression échouée'); return }
+    toast.success('Période retirée')
     await loadBlocked()
   }
 
   async function uploadAndSet(input, key){
     const file = input?.files?.[0]
-    if (!file){ alert('Choisissez un fichier'); return }
+    if (!file){ toast.error('Choisissez un fichier'); return }
     const ext = file.name.split('.').pop() || ''
     const path = `uploads/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
     const { error } = await supabase.storage.from('media').upload(path, file, { contentType: file.type, upsert:false })
-    if (error){ alert('Upload échoué: '+error.message); return }
+    if (error){ toast.error('Upload échoué: '+error.message); return }
     const { data } = supabase.storage.from('media').getPublicUrl(path)
     setForm(f=>({...f, [key]: data.publicUrl }))
+    toast.success('Media uploadé')
   }
   async function addMedia(type){
     const url = (type==='image'? form.imageUrl : form.videoUrl) || ''
-    if (!url){ alert('Renseignez une URL ou uploadez avant'); return }
+    if (!url){ toast.error('Renseignez une URL ou uploadez avant'); return }
     const { error } = await supabase.from('property_media').insert({ propertyId: p.id, url, type })
-    if (error){ alert('Ajout media échoué'); return }
+    if (error){ toast.error('Ajout media échoué'); return }
+    toast.success('Média ajouté à la galerie')
     await loadMedia()
   }
   async function removeMedia(id){
     const { error } = await supabase.from('property_media').delete().eq('id', id).eq('propertyId', p.id)
-    if (error){ alert('Suppression media échouée'); return }
+    if (error){ toast.error('Suppression media échouée'); return }
+    toast.success('Média supprimé')
     await loadMedia()
   }
 
@@ -150,9 +150,8 @@ export default function AdminPropertyItem({ p, onUpdated, onDeleted }){
 
       <hr style={{opacity:.2, margin:'12px 0'}}/>
       <div className="muted small" style={{marginBottom:6}}>Disponibilités (admin):</div>
+      <DateRangeInputs start={av.start} end={av.end} onChange={setAv} />
       <div className="row">
-        <input className="input" ref={avStartRef} placeholder="Début (YYYY-MM-DD)" />
-        <input className="input" ref={avEndRef} placeholder="Fin (YYYY-MM-DD)" />
         <button className="btn" onClick={addUnavailable}>Bloquer la période</button>
       </div>
       {loadingRanges ? <div className="empty">Chargement calendrier...</div> : (

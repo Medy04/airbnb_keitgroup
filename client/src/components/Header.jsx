@@ -24,7 +24,7 @@ export default function Header(){
       <div className="container header-inner">
         <NavLink to="/" className="brand">
           <img src="/logo.png" alt="Logo" className="logo" />
-          <span>KEITRESIDENCES</span>
+          <span>LINERESIDENCES</span>
         </NavLink>
         <nav>
           <NavLink to="/" className={({isActive})=>isActive? 'active' : ''}><IconHome size={18}/> Accueil</NavLink>

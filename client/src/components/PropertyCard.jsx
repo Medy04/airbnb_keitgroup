@@ -15,12 +15,12 @@ export default function PropertyCard({ p }){
     (async ()=>{
       try{
         const [{ data: bookings }, { data: unav }] = await Promise.all([
-          supabase.from('bookings').select('startDate,endDate,status').eq('propertyId', p.id).in('status', ['pending','confirmed']),
-          supabase.from('availability').select('id,startDate,endDate').eq('propertyId', p.id)
+          supabase.from('bookings').select('startdate,enddate,status').eq('propertyid', p.id).in('status', ['pending','confirmed']),
+          supabase.from('availability').select('id,startdate,enddate').eq('propertyid', p.id)
         ])
         const arr = []
-        ;(bookings||[]).forEach(b=> arr.push({ startDate: b.startDate, endDate: b.endDate, source:'booking' }))
-        ;(unav||[]).forEach(r=> arr.push({ id: r.id, startDate: r.startDate, endDate: r.endDate, source:'unavailable' }))
+        ;(bookings||[]).forEach(b=> arr.push({ startDate: b.startdate, endDate: b.enddate, source:'booking' }))
+        ;(unav||[]).forEach(r=> arr.push({ id: r.id, startDate: r.startdate, endDate: r.enddate, source:'unavailable' }))
         setRanges(arr)
       }catch{ setRanges([]) }
     })()
@@ -47,7 +47,7 @@ export default function PropertyCard({ p }){
         </div>
         <Modal open={openCal} onClose={()=>setOpenCal(false)} title={`Calendrier • ${p.title}`} width={780}>
           <div>
-            <InlineCalendar ranges={ranges||[]} />
+            <InlineCalendar ranges={ranges||[]} window={{ start: p.availableFrom, end: p.availableTo }} />
             <div style={{marginTop:10}}>
               <BookingWidget property={p} onBooked={()=>{}} />
             </div>

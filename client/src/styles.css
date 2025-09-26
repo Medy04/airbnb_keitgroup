@@ -35,3 +35,14 @@ textarea{width:100%;min-height:90px}
 .modal-title{font-weight:600}
 .modal-close{background:transparent;border:none;font-size:20px;cursor:pointer}
 .modal-body{padding:16px}
+
+/* Calendar day highlights */
+.air-datepicker-cell.blocked-day{background:#fee2e2;color:#991b1b;pointer-events:none}
+.air-datepicker-cell.available-window{background:#ecfeff;color:#0e7490}
+
+/* Toasts */
+.toast-container{position:fixed;top:16px;right:16px;display:flex;flex-direction:column;gap:8px;z-index:60}
+.toast{padding:10px 14px;border-radius:10px;border:1px solid var(--border);background:#fff;box-shadow:0 10px 30px rgba(0,0,0,.08)}
+.toast.success{background:#ecfdf5;border-color:#a7f3d0;color:#065f46}
+.toast.error{background:#fef2f2;border-color:#fecaca;color:#991b1b}
+.toast.info{background:#eff6ff;border-color:#bfdbfe;color:#1e3a8a}

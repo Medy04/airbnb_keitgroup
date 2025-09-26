@@ -22,7 +22,7 @@ function Bookings(){
   const [loading, setLoading] = useState(true)
   useEffect(()=>{(async()=>{
     try{
-      const { data, error } = await supabase.from('bookings').select('*').order('createdAt', { ascending:false })
+      const { data, error } = await supabase.from('bookings').select('*').order('createdat', { ascending:false })
       setItems(Array.isArray(data)? data:[])
     } finally{ setLoading(false) }
   })()},[])
@@ -32,8 +32,8 @@ function Bookings(){
       {loading? <div className="empty">Chargement...</div> :
         items.map(b => (
           <div key={b.id} className="row" style={{borderBottom:'1px solid #e5e7eb',padding:'8px 0'}}>
-            <div><strong>#{b.id?.slice(0,8)}</strong> {b.guestName} ({b.guestEmail})</div>
-            <div className="small muted">{b.startDate} → {b.endDate} • {b.status}</div>
+            <div><strong>#{String(b.id).slice(0,8)}</strong> {b.guestname} ({b.guestemail})</div>
+            <div className="small muted">{b.startdate} → {b.enddate} • {b.status}</div>
           </div>
         ))
       }
@@ -46,7 +46,7 @@ function Payments(){
   const [loading, setLoading] = useState(true)
   useEffect(()=>{(async()=>{
     try{
-      const { data, error } = await supabase.from('bookings').select('*').eq('status','pending').order('createdAt',{ascending:false})
+      const { data, error } = await supabase.from('bookings').select('*').eq('status','pending').order('createdat',{ascending:false})
       setItems(Array.isArray(data)? data:[])
     } finally{ setLoading(false) }
   })()},[])
@@ -56,8 +56,8 @@ function Payments(){
       {loading? <div className="empty">Chargement...</div> :
         items.map(b => (
           <div key={b.id} className="row" style={{borderBottom:'1px solid #e5e7eb',padding:'8px 0'}}>
-            <div><strong>#{b.id?.slice(0,8)}</strong> {b.guestName} ({b.guestEmail})</div>
-            <div className="small muted">{b.startDate} → {b.endDate} • {b.status}</div>
+            <div><strong>#{String(b.id).slice(0,8)}</strong> {b.guestname} ({b.guestemail})</div>
+            <div className="small muted">{b.startdate} → {b.enddate} • {b.status}</div>
           </div>
         ))
       }

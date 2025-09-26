@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react'
 import AirDatepicker from 'air-datepicker'
 import fr from 'air-datepicker/locale/fr'
 
-export default function InlineCalendar({ ranges = [] }){
+export default function InlineCalendar({ ranges = [], window: win }){
   const ref = useRef(null)
   useEffect(()=>{
     if (!ref.current) return
@@ -17,10 +17,17 @@ export default function InlineCalendar({ ranges = [] }){
           const be = new Date(r.endDate).setHours(0,0,0,0)
           return t >= bs && t <= be
         })
-        return blocked ? { disabled: true, classes: 'blocked-day' } : {}
+        if (blocked) return { disabled: true, classes: 'blocked-day' }
+        // highlight available window if provided
+        if (win?.start && win?.end){
+          const ws = new Date(win.start).setHours(0,0,0,0)
+          const we = new Date(win.end).setHours(0,0,0,0)
+          if (t >= ws && t <= we) return { classes: 'available-window' }
+        }
+        return {}
       }
     })
     return () => { try { dp?.destroy?.() } catch{} }
-  }, [JSON.stringify(ranges)])
+  }, [JSON.stringify(ranges), win?.start, win?.end])
   return <div className="inline-calendar" ref={ref} />
 }

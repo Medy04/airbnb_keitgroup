@@ -6,6 +6,7 @@ import Login from './pages/Login.jsx'
 import Signup from './pages/Signup.jsx'
 import Admin from './pages/Admin.jsx'
 import AdminLogin from './pages/AdminLogin.jsx'
+import MyReservations from './pages/MyReservations.jsx'
 import './styles.css'
 
 export default function App(){
@@ -17,6 +18,7 @@ export default function App(){
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
+          <Route path="/mes-reservations" element={<MyReservations />} />
           <Route path="/admin/*" element={<Admin />} />
           <Route path="/admin-login" element={<AdminLogin />} />
         </Routes>
