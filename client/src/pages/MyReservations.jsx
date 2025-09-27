@@ -8,6 +8,21 @@ export default function MyReservations(){
   const [error, setError] = useState('')
   const [open, setOpen] = useState(false)
   const [current, setCurrent] = useState(null)
+  const [userEmail, setUserEmail] = useState('')
+
+  async function load(email){
+    setLoading(true)
+    try{
+      const { data, error } = await supabase
+        .from('bookings')
+        .select('*')
+        .eq('guestemail', email)
+        .order('createdat', { ascending: false })
+      if (error) throw error
+      setItems(Array.isArray(data)? data:[])
+    }catch(e){ setError(e.message) }
+    finally{ setLoading(false) }
+  }
 
   useEffect(()=>{
     (async ()=>{
@@ -15,13 +30,8 @@ export default function MyReservations(){
         const { data: auth } = await supabase.auth.getUser()
         const email = auth?.user?.email || ''
         if (!email){ setError("Veuillez vous connecter pour voir vos réservations."); return }
-        const { data, error } = await supabase
-          .from('bookings')
-          .select('*')
-          .eq('guestemail', email)
-          .order('createdat', { ascending: false })
-        if (error) throw error
-        setItems(Array.isArray(data)? data:[])
+        setUserEmail(email)
+        await load(email)
 
         // Realtime updates to reflect admin status changes live
         const channel = supabase.channel('bookings-user-'+email)
@@ -37,13 +47,16 @@ export default function MyReservations(){
           .subscribe()
         return () => { try { supabase.removeChannel(channel) } catch {} }
       }catch(e){ setError(e.message) }
-      finally{ setLoading(false) }
+      finally{ /* loading handled in load */ }
     })()
   },[])
 
   return (
     <div>
-      <h1 className="page-title">Mes réservations</h1>
+      <div className="row" style={{justifyContent:'space-between',alignItems:'center'}}>
+        <h1 className="page-title" style={{margin:0}}>Mes réservations</h1>
+        <button className="btn" onClick={()=> userEmail && load(userEmail)}>Actualiser</button>
+      </div>
       {loading && <div className="empty">Chargement...</div>}
       {error && <div className="empty">{error}</div>}
       {!loading && !error && (
@@ -54,7 +67,26 @@ export default function MyReservations(){
                 <div>
                   <strong>#{String(b.id).slice(0,8)}</strong> • {b.startdate} → {b.enddate}
                 </div>
-                <div className="small muted">Statut: {(b.status==='pending'?'En attente': b.status==='paying'?'Paiement en cours': b.status==='finalized'?'Finalisée': b.status)} • Voyageurs: {b.guests} • Total: {b.total} €</div>
+                <div className="small muted">
+                  <span className={`badge status ${b.status}`}>
+                    {(b.status==='pending'?'En attente': b.status==='paying'?'Paiement en cours': b.status==='finalized'?'Finalisée': b.status==='cancelled'?'Annulée': b.status)}
+                  </span>
+                  {' '}• Voyageurs: {b.guests} • Total: {b.total} €
+                </div>
+                {b.status==='pending' && (
+                  <div className="row" style={{marginTop:6}} onClick={e=>e.stopPropagation()}>
+                    <button className="btn" onClick={async ()=>{
+                      if (!confirm('Voulez-vous annuler cette réservation ?')) return
+                      const { error } = await supabase
+                        .from('bookings')
+                        .update({ status: 'cancelled' })
+                        .eq('id', b.id)
+                        .eq('guestemail', userEmail)
+                      if (error){ alert('Annulation échouée: '+error.message); return }
+                      setItems(list => list.map(x => x.id===b.id? { ...x, status:'cancelled' }: x))
+                    }}>Annuler</button>
+                  </div>
+                )}
               </div>
             ))}
             <Modal open={open} onClose={()=>setOpen(false)} title={`Réservation #${String(current?.id||'').slice(0,8)}`} width={680}>
@@ -65,8 +97,23 @@ export default function MyReservations(){
                   <div className="small muted" style={{marginTop:6}}>Total</div>
                   <div><strong>{current.total} €</strong></div>
                   <div className="small muted" style={{marginTop:6}}>Statut</div>
-                  <div><strong>{(current.status==='pending'?'En attente': current.status==='paying'?'Paiement en cours': current.status==='finalized'?'Finalisée': current.status)}</strong></div>
-                  {current.paymentlink && (
+                  <div><strong>{(current.status==='pending'?'En attente': current.status==='paying'?'Paiement en cours': current.status==='finalized'?'Finalisée': current.status==='cancelled'?'Annulée': current.status)}</strong></div>
+                  {current.status==='pending' && (
+                    <div style={{marginTop:12}}>
+                      <button className="btn" onClick={async ()=>{
+                        if (!confirm('Voulez-vous annuler cette réservation ?')) return
+                        const { error } = await supabase
+                          .from('bookings')
+                          .update({ status:'cancelled' })
+                          .eq('id', current.id)
+                          .eq('guestemail', userEmail)
+                        if (error){ alert('Annulation échouée: '+error.message); return }
+                        setItems(list => list.map(x => x.id===current.id? { ...x, status:'cancelled' }: x))
+                        setOpen(false)
+                      }}>Annuler</button>
+                    </div>
+                  )}
+                  {current.paymentlink && current.status==='paying' && (
                     <div style={{marginTop:10}}>
                       <a className="btn" href={current.paymentlink} target="_blank" rel="noreferrer">Payer maintenant</a>
                     </div>

@@ -24,7 +24,7 @@ export default function AdminPropertyItem({ p, onUpdated, onDeleted }){
   async function loadBlocked(){
     setLoadingRanges(true)
     const [{ data: bookings }, { data: unav }] = await Promise.all([
-      supabase.from('bookings').select('startdate,enddate,status').eq('propertyid', p.id).in('status', ['pending','confirmed']),
+      supabase.from('bookings').select('startdate,enddate,status').eq('propertyid', p.id).in('status', ['pending','paying','finalized']),
       supabase.from('availability').select('id,startdate,enddate').eq('propertyid', p.id)
     ])
     const arr = []
@@ -34,7 +34,7 @@ export default function AdminPropertyItem({ p, onUpdated, onDeleted }){
     setLoadingRanges(false)
   }
   async function loadMedia(){
-    const { data, error } = await supabase.from('property_media').select('*').eq('propertyId', p.id).order('position', { ascending: true })
+    const { data, error } = await supabase.from('property_media').select('*').eq('propertyid', p.id).order('position', { ascending: true })
     setMedia(data||[])
   }
   useEffect(()=>{ loadBlocked(); loadMedia(); },[p.id])
@@ -48,7 +48,7 @@ export default function AdminPropertyItem({ p, onUpdated, onDeleted }){
       onEnd: async () => {
         const order = Array.from(mediaListRef.current.children).map((ch, idx) => ({ id: ch.dataset.id, pos: idx+1})).filter(x=>x.id)
         for (const it of order){
-          await supabase.from('property_media').update({ position: it.pos }).eq('id', it.id).eq('propertyId', p.id)
+          await supabase.from('property_media').update({ position: it.pos }).eq('id', it.id).eq('propertyid', p.id)
         }
       }
     })
@@ -110,13 +110,13 @@ export default function AdminPropertyItem({ p, onUpdated, onDeleted }){
   async function addMedia(type){
     const url = (type==='image'? form.imageUrl : form.videoUrl) || ''
     if (!url){ toast.error('Renseignez une URL ou uploadez avant'); return }
-    const { error } = await supabase.from('property_media').insert({ propertyId: p.id, url, type })
+    const { error } = await supabase.from('property_media').insert({ propertyid: p.id, url, type })
     if (error){ toast.error('Ajout media échoué'); return }
     toast.success('Média ajouté à la galerie')
     await loadMedia()
   }
   async function removeMedia(id){
-    const { error } = await supabase.from('property_media').delete().eq('id', id).eq('propertyId', p.id)
+    const { error } = await supabase.from('property_media').delete().eq('id', id).eq('propertyid', p.id)
     if (error){ toast.error('Suppression media échouée'); return }
     toast.success('Média supprimé')
     await loadMedia()

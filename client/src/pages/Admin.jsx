@@ -6,6 +6,7 @@ import { supabase } from '../lib/supabase.js'
 import { requireAdmin } from '../lib/supabaseAuth.js'
 import Modal from '../components/Modal.jsx'
 import { useToast } from '../components/ToastProvider.jsx'
+import emailjs from 'emailjs-com'
 
 function Tabs({ tabs, value, onChange }){
   return (
@@ -31,6 +32,20 @@ function Bookings(){
       setItems(Array.isArray(data)? data:[])
     } finally{ setLoading(false) }
   })()},[])
+  useEffect(()=>{
+    const channel = supabase.channel('admin-bookings')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, (payload)=>{
+        const row = payload.new
+        setItems(prev => {
+          const list = prev.slice()
+          const idx = list.findIndex(x => x.id === row.id)
+          if (idx >= 0) list[idx] = row; else list.unshift(row)
+          return list.sort((a,b)=> new Date(b.createdat) - new Date(a.createdat))
+        })
+      })
+      .subscribe()
+    return () => { try { supabase.removeChannel(channel) } catch{} }
+  },[])
 
   async function save(b){
     const { id, status, paymentlink } = b || {}
@@ -48,7 +63,7 @@ function Bookings(){
         items.map(b => (
           <div key={b.id} className="row" style={{borderBottom:'1px solid #e5e7eb',padding:'8px 0',cursor:'pointer'}} onClick={()=>openBooking(b)}>
             <div><strong>#{String(b.id).slice(0,8)}</strong> {b.guestname} ({b.guestemail})</div>
-            <div className="small muted">{b.startdate} → {b.enddate} • {(b.status==='pending'?'En attente': b.status==='paying'?'Paiement en cours': b.status==='finalized'?'Finalisée': b.status)}</div>
+            <div className="small muted">{b.startdate} → {b.enddate} • <span className={`badge status ${b.status}`}>{(b.status==='pending'?'En attente': b.status==='paying'?'Paiement en cours': b.status==='finalized'?'Finalisée': b.status==='cancelled'?'Annulée': b.status)}</span></div>
           </div>
         ))
       }
@@ -68,11 +83,43 @@ function Bookings(){
                 <option value="paying">Paiement en cours</option>
                 <option value="finalized">Finalisé</option>
               </select>
-              <input className="input" placeholder="Lien de paiement" value={current.paymentlink||''} onChange={e=>setCurrent(c=>({...c,paymentlink:e.target.value}))} />
-              <button className="btn" onClick={()=>save(current)}>Enregistrer</button>
+              <button className="btn" onClick={async ()=>{
+                const { error } = await supabase.from('bookings').update({ status: current.status }).eq('id', current.id)
+                if (error){ toast.error('Erreur mise à jour statut: '+error.message); return }
+                setItems(list => list.map(x => x.id===current.id? { ...x, status: current.status }: x))
+                toast.success('Statut mis à jour')
+              }}>Mettre à jour le statut</button>
             </div>
             <div className="row">
-              <button className="btn" onClick={()=>{ if(!current.paymentlink){ toast.error('Ajoutez un lien'); return } toast.success('Lien de paiement prêt à être envoyé'); }}>Envoyer lien de paiement</button>
+              <input className="input" placeholder="Lien de paiement" value={current.paymentlink||''} onChange={e=>setCurrent(c=>({...c,paymentlink:e.target.value}))} />
+              <button className="btn" onClick={async ()=>{
+                if(!current.paymentlink){ toast.error('Ajoutez un lien'); return }
+                const { error } = await supabase.from('bookings').update({ paymentlink: current.paymentlink }).eq('id', current.id)
+                if (error){ toast.error('Erreur sauvegarde: '+error.message); return }
+                setItems(list => list.map(x => x.id===current.id? { ...x, paymentlink: current.paymentlink }: x))
+                // Send payment link via EmailJS
+                try{
+                  const serviceId = import.meta.env.VITE_EMAILJS_SERVICE_ID
+                  const templateId = import.meta.env.VITE_EMAILJS_PAYMENT_TEMPLATE_ID || import.meta.env.VITE_EMAILJS_TEMPLATE_ID
+                  const publicKey = import.meta.env.VITE_EMAILJS_PUBLIC_KEY
+                  const templateParams = {
+                    to_email: current.guestemail,
+                    email: current.guestemail,
+                    to_name: current.guestname || 'Client',
+                    reservation_id: current.id,
+                    payment_link: current.paymentlink,
+                    from_name: 'LineResidences',
+                    from_email: 'keitgroup@yahoo.com',
+                    reply_to: 'keitgroup@yahoo.com',
+                    message: `Bonjour ${current.guestname||''},\n\nVoici votre lien de paiement Revolut pour la réservation N°${String(current.id)}.\n\nLien de paiement: ${current.paymentlink}\n\nMerci de votre confiance !`,
+                  }
+                  await emailjs.send(serviceId, templateId, templateParams, publicKey)
+                  toast.success('Lien de paiement envoyé par email')
+                }catch(err){
+                  const detail = [err?.status, err?.text || err?.message].filter(Boolean).join(' ')
+                  toast.error('Echec envoi email: '+(detail||'Erreur inconnue'))
+                }
+              }}>Envoyer lien de paiement</button>
             </div>
           </div>
         )}
@@ -89,7 +136,7 @@ function Payments(){
   const toast = useToast()
   useEffect(()=>{(async()=>{
     try{
-      const { data, error } = await supabase.from('bookings').select('*').eq('status','pending').order('createdat',{ascending:false})
+      const { data, error } = await supabase.from('bookings').select('*').eq('status','finalized').order('createdat',{ascending:false})
       setItems(Array.isArray(data)? data:[])
     } finally{ setLoading(false) }
   })()},[])
@@ -109,7 +156,7 @@ function Payments(){
         items.map(b => (
           <div key={b.id} className="row" style={{borderBottom:'1px solid #e5e7eb',padding:'8px 0',cursor:'pointer'}} onClick={()=>openBooking(b)}>
             <div><strong>#{String(b.id).slice(0,8)}</strong> {b.guestname} ({b.guestemail})</div>
-            <div className="small muted">{b.startdate} → {b.enddate} • {(b.status==='pending'?'En attente': b.status==='paying'?'Paiement en cours': b.status==='finalized'?'Finalisée': b.status)}</div>
+            <div className="small muted">{b.startdate} → {b.enddate} • <span className={`badge status ${b.status}`}>{(b.status==='pending'?'En attente': b.status==='paying'?'Paiement en cours': b.status==='finalized'?'Finalisée': b.status)}</span></div>
           </div>
         ))
       }
@@ -124,16 +171,35 @@ function Payments(){
             <div><strong>{current.total} €</strong></div>
             <hr style={{opacity:.2, width:'100%'}}/>
             <div className="row">
-              <select className="input" value={current.status} onChange={e=>setCurrent(c=>({...c,status:e.target.value}))}>
-                <option value="pending">En attente</option>
-                <option value="paying">Paiement en cours</option>
-                <option value="finalized">Finalisé</option>
-              </select>
               <input className="input" placeholder="Lien de paiement" value={current.paymentlink||''} onChange={e=>setCurrent(c=>({...c,paymentlink:e.target.value}))} />
-              <button className="btn" onClick={()=>save(current)}>Enregistrer</button>
-            </div>
-            <div className="row">
-              <button className="btn" onClick={()=>{ if(!current.paymentlink){ toast.error('Ajoutez un lien'); return } toast.success('Lien de paiement prêt à être envoyé'); }}>Envoyer lien de paiement</button>
+              <button className="btn" onClick={async ()=>{
+                if(!current.paymentlink){ toast.error('Ajoutez un lien'); return }
+                const { error } = await supabase.from('bookings').update({ paymentlink: current.paymentlink }).eq('id', current.id)
+                if (error){ toast.error('Erreur sauvegarde: '+error.message); return }
+                setItems(list => list.map(x => x.id===current.id? { ...x, paymentlink: current.paymentlink }: x))
+                // Send payment link via EmailJS
+                try{
+                  const serviceId = import.meta.env.VITE_EMAILJS_SERVICE_ID
+                  const templateId = import.meta.env.VITE_EMAILJS_TEMPLATE_ID
+                  const publicKey = import.meta.env.VITE_EMAILJS_PUBLIC_KEY
+                  const templateParams = {
+                    to_email: current.guestemail,
+                    email: current.guestemail,
+                    to_name: current.guestname || 'Client',
+                    reservation_id: current.id,
+                    payment_link: current.paymentlink,
+                    from_name: 'LINERESIDENCES',
+                    from_email: 'keitgroup@yahoo.com',
+                    reply_to: 'keitgroup@yahoo.com',
+                    message: `Bonjour ${current.guestname||''},\n\nVoici votre lien de paiement Revolut pour la réservation N°${String(current.id)}.\n\nLien de paiement: ${current.paymentlink}\n\nMerci de votre confiance !`,
+                  }
+                  await emailjs.send(serviceId, templateId, templateParams, publicKey)
+                  toast.success('Lien de paiement envoyé par email')
+                }catch(err){
+                  const detail = [err?.status, err?.text || err?.message].filter(Boolean).join(' ')
+                  toast.error('Echec envoi email: '+(detail||'Erreur inconnue'))
+                }
+              }}>Envoyer lien de paiement</button>
             </div>
           </div>
         )}
@@ -234,9 +300,22 @@ function Properties(){
 
 export default function Admin(){
   const [tab, setTab] = useState('bookings')
+  const [stats, setStats] = useState({ total: 0, pending: 0, paying: 0, finalized: 0 })
   useEffect(()=>{
     requireAdmin().catch(()=>{ window.location.href = '/admin-login' })
   },[])
+  async function loadStats(){
+    try{
+      const [t, p, y, f] = await Promise.all([
+        supabase.from('bookings').select('*', { count:'exact', head:true }),
+        supabase.from('bookings').select('*', { count:'exact', head:true }).eq('status','pending'),
+        supabase.from('bookings').select('*', { count:'exact', head:true }).eq('status','paying'),
+        supabase.from('bookings').select('*', { count:'exact', head:true }).eq('status','finalized'),
+      ])
+      setStats({ total: t.count||0, pending: p.count||0, paying: y.count||0, finalized: f.count||0 })
+    }catch{}
+  }
+  useEffect(()=>{ loadStats() },[])
   const tabs = [
     { id:'bookings', label:'Commandes', icon:<IconListDetails size={18}/> },
     { id:'payments', label:'Paiements', icon:<IconCreditCard size={18}/> },
@@ -245,6 +324,37 @@ export default function Admin(){
   return (
     <div>
       <h1 className="page-title">Espace Admin</h1>
+      <div className="row" style={{justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
+        <h2 style={{margin:0,fontSize:18}}>Tableau de bord</h2>
+        <button className="btn" onClick={loadStats}>Actualiser</button>
+      </div>
+      <div className="grid" style={{gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))',marginBottom:12}}>
+        <div className="card" style={{padding:12}}>
+          <div className="small muted">Commandes reçues</div>
+          <div style={{fontSize:24,fontWeight:700}}>{stats.total}</div>
+        </div>
+        <div className="card" style={{padding:12}}>
+          <div className="small muted">En attente</div>
+          <div style={{display:'flex',alignItems:'center',gap:8}}>
+            <span className="badge status pending">En attente</span>
+            <div style={{fontSize:20,fontWeight:700}}>{stats.pending}</div>
+          </div>
+        </div>
+        <div className="card" style={{padding:12}}>
+          <div className="small muted">Paiement en cours</div>
+          <div style={{display:'flex',alignItems:'center',gap:8}}>
+            <span className="badge status paying">Paiement en cours</span>
+            <div style={{fontSize:20,fontWeight:700}}>{stats.paying}</div>
+          </div>
+        </div>
+        <div className="card" style={{padding:12}}>
+          <div className="small muted">Traitées</div>
+          <div style={{display:'flex',alignItems:'center',gap:8}}>
+            <span className="badge status finalized">Finalisée</span>
+            <div style={{fontSize:20,fontWeight:700}}>{stats.finalized}</div>
+          </div>
+        </div>
+      </div>
       <Tabs tabs={tabs} value={tab} onChange={setTab} />
       {tab==='bookings' && <Bookings />}
       {tab==='payments' && <Payments />}

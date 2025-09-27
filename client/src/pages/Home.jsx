@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
-import { IconBuilding } from '@tabler/icons-react'
+import { IconBuilding, IconShieldLock } from '@tabler/icons-react'
+import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase.js'
 import PropertyCard from '../components/PropertyCard.jsx'
 
@@ -42,6 +43,23 @@ export default function Home(){
           <PropertyCard key={p.id} p={p} />
         ))}
       </div>
+      {/* Admin login floating tab (bottom-left) */}
+      <Link to="/admin-login" style={{
+        position:'fixed',
+        left:16,
+        bottom:16,
+        display:'inline-flex',
+        alignItems:'center',
+        gap:8,
+        textDecoration:'none',
+        background:'#111827',
+        color:'#fff',
+        padding:'10px 12px',
+        borderRadius:999,
+        boxShadow:'0 8px 20px rgba(0,0,0,.2)'
+      }}>
+        <IconShieldLock size={18} /> Admin
+      </Link>
     </div>
   )
 }

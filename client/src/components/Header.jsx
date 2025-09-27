@@ -28,9 +28,8 @@ export default function Header(){
         </NavLink>
         <nav>
           <NavLink to="/" className={({isActive})=>isActive? 'active' : ''}><IconHome size={18}/> Accueil</NavLink>
+          {isAdmin && <NavLink to="/admin" className={({isActive})=>isActive? 'active' : ''}><IconTools size={18}/> Tableau de bord</NavLink>}
           {isUser && <NavLink to="/mes-reservations" className={({isActive})=>isActive? 'active' : ''}><IconCalendarStats size={18}/> Mes réservations</NavLink>}
-          {isAdmin && <NavLink to="/admin" className={({isActive})=>isActive? 'active' : ''}><IconTools size={18}/> Admin</NavLink>}
-          {!isAdmin && <NavLink to="/admin-login" className={({isActive})=>isActive? 'active' : ''}><IconShieldLock size={18}/> Admin</NavLink>}
           {!user && <NavLink to="/login" className={({isActive})=>isActive? 'active' : ''}><IconLogin size={18}/> Se connecter</NavLink>}
           {!!user && (
             <button className="btn" onClick={logout} style={{padding:'6px 10px'}}><IconLogout size={18}/> Se déconnecter</button>

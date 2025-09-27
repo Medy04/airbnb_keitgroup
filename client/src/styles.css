@@ -46,3 +46,14 @@ textarea{width:100%;min-height:90px}
 .toast.success{background:#ecfdf5;border-color:#a7f3d0;color:#065f46}
 .toast.error{background:#fef2f2;border-color:#fecaca;color:#991b1b}
 .toast.info{background:#eff6ff;border-color:#bfdbfe;color:#1e3a8a}
+
+/* Badges */
+.badge{display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:4px 8px;border-radius:999px;border:1px solid var(--border);background:#fff}
+.badge.status.pending{background:#eff6ff;border-color:#bfdbfe;color:#1e3a8a}
+.badge.status.paying{background:#fff7ed;border-color:#fed7aa;color:#9a3412}
+.badge.status.finalized{background:#ecfdf5;border-color:#a7f3d0;color:#065f46}
+.badge.status.cancelled{background:#fee2e2;border-color:#fecaca;color:#991b1b}
+
+/* Clickable card hover */
+.card.clickable{transition:transform .15s ease, box-shadow .15s ease, background .15s ease; cursor:pointer}
+.card.clickable:hover{background:#f8fafc; box-shadow:0 12px 24px rgba(0,0,0,.08); transform:translateY(-2px)}

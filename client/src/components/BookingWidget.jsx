@@ -3,6 +3,8 @@ import AirDatepicker from 'air-datepicker'
 import fr from 'air-datepicker/locale/fr'
 import { supabase } from '../lib/supabase.js'
 import { useToast } from './ToastProvider.jsx'
+import emailjs from 'emailjs-com'
+import Modal from './Modal.jsx'
 
 export default function BookingWidget({ property, onBooked }){
   const toast = useToast()
@@ -16,11 +18,13 @@ export default function BookingWidget({ property, onBooked }){
   const [guests, setGuests] = useState(1)
   const [loading, setLoading] = useState(false)
   const calRef = useRef(null)
+  const [showConfirm, setShowConfirm] = useState(false)
+  const [confirmMsg, setConfirmMsg] = useState('')
 
   async function loadRanges(){
     try{
       const [{ data: bookings }, { data: unav }] = await Promise.all([
-        supabase.from('bookings').select('startdate,enddate,status').eq('propertyid', property.id).in('status', ['pending','confirmed']),
+        supabase.from('bookings').select('startdate,enddate,status').eq('propertyid', property.id).in('status', ['pending','paying','finalized']),
         supabase.from('availability').select('id,startdate,enddate').eq('propertyid', property.id)
       ])
       const arr = []
@@ -92,13 +96,47 @@ export default function BookingWidget({ property, onBooked }){
         total,
         createdat: new Date().toISOString(),
       }
-      const { error } = await supabase.from('bookings').insert(payload)
+      const { data: rows, error } = await supabase.from('bookings').insert(payload).select('*')
       if (error) throw new Error(error.message)
+      const booking = Array.isArray(rows)? rows[0] : null
       onBooked?.()
       setFirstName(''); setLastName(''); setGuestEmail(''); setPhone(''); setGuests(1); setStart(''); setEnd('')
       toast.success('Réservation créée !')
       // refresh calendar to reflect new blocked dates
       await loadRanges()
+
+      // Prepare and send confirmation email via EmailJS
+      try{
+        const serviceId = import.meta.env.VITE_EMAILJS_SERVICE_ID
+        const templateId = import.meta.env.VITE_EMAILJS_TEMPLATE_ID
+        const publicKey = import.meta.env.VITE_EMAILJS_PUBLIC_KEY
+        const templateParams = {
+          to_email: guestEmail,
+          email: guestEmail,
+          to_name: guestName,
+          reservation_id: booking?.id || '',
+          property_title: property.title || '',
+          property_address: property.address || '',
+          startdate: payload.startdate,
+          enddate: payload.enddate,
+          total: String(total),
+          // Common optional fields many EmailJS templates expect
+          from_name: 'LINERESIDENCES',
+          from_email: 'keitgroup@yahoo.com',
+          reply_to: 'keitgroup@yahoo.com',
+          message: `Merci pour votre réservation N°${booking?.id || ''} concernant ${property.title || ''} à ${property.address || ''} du ${payload.startdate} au ${payload.enddate} (Total: ${total} €). Vous allez recevoir un lien de paiement Revolut sur cet adresse mail lorsque votre commande aura été traitée par notre équipe. Merci de votre confiance !`,
+        }
+        await emailjs.send(serviceId, templateId, templateParams, publicKey)
+        toast.success('Email de confirmation envoyé')
+      }catch(err){
+        const detail = [err?.status, err?.text || err?.message].filter(Boolean).join(' ')
+        toast.error('Echec envoi email: ' + (detail || 'Erreur inconnue'))
+      }
+
+      // Show confirmation popup with same message
+      const msg = `Merci pour votre réservation N°${booking?.id || ''} concernant ${property.title || ''} à ${property.address || ''} du ${payload.startdate} au ${payload.enddate} (Total: ${total} €).\n\nVous allez recevoir un lien de paiement Revolut sur cet adresse mail lorsque votre commande aura été traitée par notre équipe.\n\nMerci de votre confiance !`
+      setConfirmMsg(msg)
+      setShowConfirm(true)
     }catch(e){ toast.error(e.message) }
     finally{ setLoading(false) }
   }
@@ -118,6 +156,9 @@ export default function BookingWidget({ property, onBooked }){
         <input className="input" type="number" min="1" placeholder="Voyageurs" value={guests} onChange={e=>setGuests(e.target.value)} />
         <button className="btn" disabled={loading || !start || !end}>{loading? 'Envoi...' : 'Réserver'}</button>
       </form>
+      <Modal open={showConfirm} onClose={()=>setShowConfirm(false)} title="Confirmation de réservation" width={640}>
+        <pre style={{whiteSpace:'pre-wrap'}}>{confirmMsg}</pre>
+      </Modal>
     </div>
   )
 }
