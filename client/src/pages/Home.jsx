@@ -8,10 +8,18 @@ export default function Home(){
   const [properties, setProperties] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [userEmail, setUserEmail] = useState('')
 
   useEffect(()=>{
     (async ()=>{
       try{
+        // Load auth user for greeting
+        try{
+          const { data: auth } = await supabase.auth.getUser()
+          const email = auth?.user?.email || ''
+          setUserEmail(email)
+        }catch{}
+
         const { data, error } = await supabase.from('properties').select('*').order('createdat', { ascending: false })
         if (error) throw new Error(error.message)
         const list = (data||[]).map(d => ({
@@ -35,6 +43,11 @@ export default function Home(){
 
   return (
     <div>
+      {userEmail && (
+        <div className="card" style={{padding:12, marginBottom:12}}>
+          Bonjour <strong>{userEmail}</strong>, bienvenue sur LineResidences
+        </div>
+      )}
       <h1 className="page-title">Nos logements</h1>
       {loading && <div className="empty">Chargement...</div>}
       {error && <div className="empty">{error}</div>}

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import BookingWidget from '../components/BookingWidget.jsx'
+import BackButton from '../components/BackButton.jsx'
 import Modal from '../components/Modal.jsx'
 
 export default function PropertyDetails(){
@@ -46,7 +47,10 @@ export default function PropertyDetails(){
 
   return (
     <div>
-      <h1 className="page-title">{p.title}</h1>
+      <div className="row" style={{alignItems:'center',gap:12}}>
+        <BackButton />
+        <h1 className="page-title" style={{margin:0}}>{p.title}</h1>
+      </div>
       <div className="row between">
         <div className="small muted">{p.address}</div>
         <div><strong>{p.pricePerNight} €</strong> <span className="small muted">/ nuit</span></div>

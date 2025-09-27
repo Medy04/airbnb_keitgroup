@@ -7,6 +7,7 @@ import { requireAdmin } from '../lib/supabaseAuth.js'
 import Modal from '../components/Modal.jsx'
 import { useToast } from '../components/ToastProvider.jsx'
 import emailjs from 'emailjs-com'
+import BackButton from '../components/BackButton.jsx'
 
 function Tabs({ tabs, value, onChange }){
   return (
@@ -323,7 +324,10 @@ export default function Admin(){
   ]
   return (
     <div>
-      <h1 className="page-title">Espace Admin</h1>
+      <div className="row" style={{alignItems:'center',gap:12,marginBottom:8}}>
+        <BackButton />
+        <h1 className="page-title" style={{margin:0}}>Espace Admin</h1>
+      </div>
       <div className="row" style={{justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
         <h2 style={{margin:0,fontSize:18}}>Tableau de bord</h2>
         <button className="btn" onClick={loadStats}>Actualiser</button>

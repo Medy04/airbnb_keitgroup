@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import Modal from '../components/Modal.jsx'
+import BackButton from '../components/BackButton.jsx'
 
 export default function MyReservations(){
   const [items, setItems] = useState([])
@@ -54,7 +55,10 @@ export default function MyReservations(){
   return (
     <div>
       <div className="row" style={{justifyContent:'space-between',alignItems:'center'}}>
-        <h1 className="page-title" style={{margin:0}}>Mes réservations</h1>
+        <div className="row" style={{alignItems:'center',gap:12}}>
+          <BackButton />
+          <h1 className="page-title" style={{margin:0}}>Mes réservations</h1>
+        </div>
         <button className="btn" onClick={()=> userEmail && load(userEmail)}>Actualiser</button>
       </div>
       {loading && <div className="empty">Chargement...</div>}
