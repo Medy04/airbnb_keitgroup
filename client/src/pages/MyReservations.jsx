@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import Modal from '../components/Modal.jsx'
 import BackButton from '../components/BackButton.jsx'
+import { useToast } from '../components/ToastProvider.jsx'
 
 export default function MyReservations(){
   const [items, setItems] = useState([])
@@ -10,6 +11,8 @@ export default function MyReservations(){
   const [open, setOpen] = useState(false)
   const [current, setCurrent] = useState(null)
   const [userEmail, setUserEmail] = useState('')
+  const [cancellingId, setCancellingId] = useState(null)
+  const toast = useToast()
 
   async function load(email){
     setLoading(true)
@@ -94,15 +97,25 @@ export default function MyReservations(){
                 </div>
                 {b.status==='pending' && (
                   <div className="row" style={{marginTop:6}} onClick={e=>e.stopPropagation()}>
-                    <button className="btn" onClick={async ()=>{
+                    <button className="btn" disabled={cancellingId===b.id} onClick={async ()=>{
                       if (!confirm('Voulez-vous annuler cette réservation ?')) return
-                      const { error } = await supabase
+                      setCancellingId(b.id)
+                      const { error: upErr } = await supabase
                         .from('bookings')
                         .update({ status: 'cancelled' })
                         .eq('id', b.id)
                         .eq('guestemail', userEmail)
-                      if (error){ alert('Annulation échouée: '+error.message); return }
-                      await load(userEmail)
+                      if (upErr){ alert('Annulation échouée: '+upErr.message); setCancellingId(null); return }
+                      // fetch updated row separately to avoid 406 on update().select()
+                      const { data: updatedRow, error: selErr } = await supabase
+                        .from('bookings')
+                        .select('*')
+                        .eq('id', b.id)
+                        .single()
+                      if (selErr){ toast.error('Annulée mais relecture échouée: '+selErr.message) }
+                      setItems(list => list.map(x => x.id===b.id? { ...x, ...(updatedRow||{ status:'cancelled' }) } : x))
+                      toast.success('Réservation annulée')
+                      setCancellingId(null)
                     }}>Annuler</button>
                   </div>
                 )}
@@ -129,15 +142,25 @@ export default function MyReservations(){
                   <div><strong>{(current.status==='pending'?'En attente': current.status==='paying'?'Paiement en cours': current.status==='finalized'?'Finalisée': current.status==='cancelled'?'Annulée': current.status)}</strong></div>
                   {current.status==='pending' && (
                     <div style={{marginTop:12}}>
-                      <button className="btn" onClick={async ()=>{
+                      <button className="btn" disabled={cancellingId===current.id} onClick={async ()=>{
                         if (!confirm('Voulez-vous annuler cette réservation ?')) return
-                        const { error } = await supabase
+                        setCancellingId(current.id)
+                        const { error: upErr } = await supabase
                           .from('bookings')
                           .update({ status:'cancelled' })
                           .eq('id', current.id)
                           .eq('guestemail', userEmail)
-                        if (error){ alert('Annulation échouée: '+error.message); return }
-                        await load(userEmail)
+                        if (upErr){ alert('Annulation échouée: '+upErr.message); setCancellingId(null); return }
+                        // fetch updated row separately
+                        const { data: updatedRow, error: selErr } = await supabase
+                          .from('bookings')
+                          .select('*')
+                          .eq('id', current.id)
+                          .single()
+                        if (selErr){ toast.error('Annulée mais relecture échouée: '+selErr.message) }
+                        setItems(list => list.map(x => x.id===current.id? { ...x, ...(updatedRow||{ status:'cancelled' }) } : x))
+                        toast.success('Réservation annulée')
+                        setCancellingId(null)
                         setOpen(false)
                       }}>Annuler</button>
                     </div>

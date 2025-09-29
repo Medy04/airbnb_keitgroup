@@ -54,6 +54,9 @@ function Bookings(){
           else list.unshift(row)
           return list.sort((a,b)=> new Date(b.createdat) - new Date(a.createdat))
         })
+        if (row?.status === 'cancelled'){
+          try{ toast.info?.(`Réservation #${String(row.id).slice(0,8)} annulée par le client`) }catch{}
+        }
       })
       .subscribe()
     return () => { try { supabase.removeChannel(channel) } catch{} }
@@ -210,7 +213,17 @@ function Payments(){
       <Modal open={open} onClose={()=>setOpen(false)} title={`Commande #${String(current?.id||'').slice(0,8)}`} width={680}>
         {current && (
           <div className="row" style={{flexDirection:'column'}}>
-            <div className="small muted">Client</div>
+            <div className="small muted">Logement</div>
+            <div className="row" style={{gap:12,alignItems:'center'}}>
+              {current._property?.imageUrl && (
+                <img src={current._property.imageUrl} alt="" style={{width:72,height:72,objectFit:'cover',borderRadius:8}} />
+              )}
+              <div>
+                <div><strong>{current._property?.title||'Logement'}</strong></div>
+                <div className="small muted">{current._property?.address||''}</div>
+              </div>
+            </div>
+            <div className="small muted" style={{marginTop:6}}>Client</div>
             <div><strong>{current.guestname}</strong> • {current.guestemail}</div>
             <div className="small muted" style={{marginTop:6}}>Période</div>
             <div>{current.startdate} → {current.enddate} • {current.guests} voyageurs</div>
