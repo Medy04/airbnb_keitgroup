@@ -124,7 +124,7 @@ export default function BookingWidget({ property, onBooked }){
           from_name: 'LINERESIDENCES',
           from_email: 'keitgroup@yahoo.com',
           reply_to: 'keitgroup@yahoo.com',
-          message: `Merci pour votre réservation N°${booking?.id || ''} concernant ${property.title || ''} à ${property.address || ''} du ${payload.startdate} au ${payload.enddate} (Total: ${total} €). Vous allez recevoir un lien de paiement Revolut sur cet adresse mail lorsque votre commande aura été traitée par notre équipe. Merci de votre confiance !`,
+          message: `Merci pour votre réservation N°${booking?.id || ''} concernant ${property.title || ''} à ${property.address || ''} du ${payload.startdate} au ${payload.enddate} (Total: ${total} €). Vous allez recevoir un lien de paiement Revolut sur cette adresse mail lorsque votre commande aura été traitée par notre équipe. Merci de votre confiance !`,
         }
         await emailjs.send(serviceId, templateId, templateParams, publicKey)
         toast.success('Email de confirmation envoyé')
@@ -134,7 +134,7 @@ export default function BookingWidget({ property, onBooked }){
       }
 
       // Show confirmation popup with same message
-      const msg = `Merci pour votre réservation N°${booking?.id || ''} concernant ${property.title || ''} à ${property.address || ''} du ${payload.startdate} au ${payload.enddate} (Total: ${total} €).\n\nVous allez recevoir un lien de paiement Revolut sur cet adresse mail lorsque votre commande aura été traitée par notre équipe.\n\nMerci de votre confiance !`
+      const msg = `Merci pour votre réservation N°${booking?.id || ''} concernant ${property.title || ''} à ${property.address || ''} du ${payload.startdate} au ${payload.enddate} (Total: ${total} €).\n\nVous allez recevoir un lien de paiement Revolut sur cette adresse mail lorsque votre commande aura été traitée par notre équipe.\n\nMerci de votre confiance !`
       setConfirmMsg(msg)
       setShowConfirm(true)
     }catch(e){ toast.error(e.message) }
