@@ -20,7 +20,14 @@ export default function MyReservations(){
         .eq('guestemail', email)
         .order('createdat', { ascending: false })
       if (error) throw error
-      setItems(Array.isArray(data)? data:[])
+      const list = Array.isArray(data)? data:[]
+      const ids = [...new Set(list.map(b=> b.propertyid).filter(Boolean))]
+      let pmap = {}
+      if (ids.length){
+        const { data: props } = await supabase.from('properties').select('*').in('id', ids)
+        ;(props||[]).forEach(p=>{ pmap[p.id] = { id:p.id, title:p.title, address:p.address, imageUrl:p.imageurl||'' } })
+      }
+      setItems(list.map(b=> ({...b, _property: pmap[b.propertyid]})))
     }catch(e){ setError(e.message) }
     finally{ setLoading(false) }
   }
@@ -67,15 +74,23 @@ export default function MyReservations(){
         items.length ? (
           <div className="card" style={{padding:16}}>
             {items.map(b => (
-              <div key={b.id} className="row" style={{borderBottom:'1px solid #e5e7eb',padding:'8px 0',cursor:'pointer'}} onClick={()=>{ setCurrent(b); setOpen(true) }}>
-                <div>
-                  <strong>#{String(b.id).slice(0,8)}</strong> • {b.startdate} → {b.enddate}
-                </div>
-                <div className="small muted">
-                  <span className={`badge status ${b.status}`}>
-                    {(b.status==='pending'?'En attente': b.status==='paying'?'Paiement en cours': b.status==='finalized'?'Finalisée': b.status==='cancelled'?'Annulée': b.status)}
-                  </span>
-                  {' '}• Voyageurs: {b.guests} • Total: {b.total} €
+              <div key={b.id} className="row" style={{borderBottom:'1px solid #e5e7eb',padding:'8px 0',cursor:'pointer',gap:12}} onClick={()=>{ setCurrent(b); setOpen(true) }}>
+                {b._property?.imageUrl ? (
+                  <img src={b._property.imageUrl} alt="" style={{width:56,height:56,objectFit:'cover',borderRadius:8}} />
+                ) : (
+                  <div style={{width:56,height:56,borderRadius:8,background:'#f3f4f6'}} />
+                )}
+                <div style={{flex:1}}>
+                  <div>
+                    <strong>#{String(b.id).slice(0,8)}</strong> • {b.startdate} → {b.enddate}
+                  </div>
+                  <div className="small muted">{b._property?.title||'Logement'} • {b._property?.address||''}</div>
+                  <div className="small muted">
+                    <span className={`badge status ${b.status}`}>
+                      {(b.status==='pending'?'En attente': b.status==='paying'?'Paiement en cours': b.status==='finalized'?'Finalisée': b.status==='cancelled'?'Annulée': b.status)}
+                    </span>
+                    {' '}• Voyageurs: {b.guests} • Total: {b.total} €
+                  </div>
                 </div>
                 {b.status==='pending' && (
                   <div className="row" style={{marginTop:6}} onClick={e=>e.stopPropagation()}>
@@ -87,7 +102,7 @@ export default function MyReservations(){
                         .eq('id', b.id)
                         .eq('guestemail', userEmail)
                       if (error){ alert('Annulation échouée: '+error.message); return }
-                      setItems(list => list.map(x => x.id===b.id? { ...x, status:'cancelled' }: x))
+                      await load(userEmail)
                     }}>Annuler</button>
                   </div>
                 )}
@@ -96,7 +111,17 @@ export default function MyReservations(){
             <Modal open={open} onClose={()=>setOpen(false)} title={`Réservation #${String(current?.id||'').slice(0,8)}`} width={680}>
               {current && (
                 <div className="row" style={{flexDirection:'column'}}>
-                  <div className="small muted">Période</div>
+                  <div className="small muted">Logement</div>
+                  <div className="row" style={{gap:12,alignItems:'center'}}>
+                    {current._property?.imageUrl && (
+                      <img src={current._property.imageUrl} alt="" style={{width:72,height:72,objectFit:'cover',borderRadius:8}} />
+                    )}
+                    <div>
+                      <div><strong>{current._property?.title||'Logement'}</strong></div>
+                      <div className="small muted">{current._property?.address||''}</div>
+                    </div>
+                  </div>
+                  <div className="small muted" style={{marginTop:6}}>Période</div>
                   <div>{current.startdate} → {current.enddate} • {current.guests} voyageurs</div>
                   <div className="small muted" style={{marginTop:6}}>Total</div>
                   <div><strong>{current.total} €</strong></div>
@@ -112,7 +137,7 @@ export default function MyReservations(){
                           .eq('id', current.id)
                           .eq('guestemail', userEmail)
                         if (error){ alert('Annulation échouée: '+error.message); return }
-                        setItems(list => list.map(x => x.id===current.id? { ...x, status:'cancelled' }: x))
+                        await load(userEmail)
                         setOpen(false)
                       }}>Annuler</button>
                     </div>

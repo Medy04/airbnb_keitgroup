@@ -30,7 +30,17 @@ function Bookings(){
   useEffect(()=>{(async()=>{
     try{
       const { data, error } = await supabase.from('bookings').select('*').order('createdat', { ascending:false })
-      setItems(Array.isArray(data)? data:[])
+      const list = Array.isArray(data)? data:[]
+      const ids = [...new Set(list.map(b=> b.propertyid).filter(Boolean))]
+      let pmap = {}
+      if (ids.length){
+        const { data: props } = await supabase.from('properties').select('*').in('id', ids)
+        ;(props||[]).forEach(p=>{ pmap[p.id] = {
+          id: p.id, title: p.title, address: p.address,
+          imageUrl: p.imageurl || '',
+        } })
+      }
+      setItems(list.map(b=> ({...b, _property: pmap[b.propertyid] })))
     } finally{ setLoading(false) }
   })()},[])
   useEffect(()=>{
@@ -40,7 +50,8 @@ function Bookings(){
         setItems(prev => {
           const list = prev.slice()
           const idx = list.findIndex(x => x.id === row.id)
-          if (idx >= 0) list[idx] = row; else list.unshift(row)
+          if (idx >= 0) list[idx] = { ...list[idx], ...row };
+          else list.unshift(row)
           return list.sort((a,b)=> new Date(b.createdat) - new Date(a.createdat))
         })
       })
@@ -62,16 +73,36 @@ function Bookings(){
       <h3>Commandes</h3>
       {loading? <div className="empty">Chargement...</div> :
         items.map(b => (
-          <div key={b.id} className="row" style={{borderBottom:'1px solid #e5e7eb',padding:'8px 0',cursor:'pointer'}} onClick={()=>openBooking(b)}>
-            <div><strong>#{String(b.id).slice(0,8)}</strong> {b.guestname} ({b.guestemail})</div>
-            <div className="small muted">{b.startdate} → {b.enddate} • <span className={`badge status ${b.status}`}>{(b.status==='pending'?'En attente': b.status==='paying'?'Paiement en cours': b.status==='finalized'?'Finalisée': b.status==='cancelled'?'Annulée': b.status)}</span></div>
+          <div key={b.id} className="row" style={{borderBottom:'1px solid #e5e7eb',padding:'8px 0',cursor:'pointer',gap:12}} onClick={()=>openBooking(b)}>
+            {b._property?.imageUrl ? (
+              <img src={b._property.imageUrl} alt="" style={{width:56,height:56,objectFit:'cover',borderRadius:8}} />
+            ) : (
+              <div style={{width:56,height:56,borderRadius:8,background:'#f3f4f6'}} />
+            )}
+            <div style={{flex:1}}>
+              <div><strong>#{String(b.id).slice(0,8)}</strong> {b.guestname} ({b.guestemail})</div>
+              <div className="small muted">
+                {(b._property?.title||'Logement')} • {b._property?.address||''}
+              </div>
+              <div className="small muted">{b.startdate} → {b.enddate} • <span className={`badge status ${b.status}`}>{(b.status==='pending'?'En attente': b.status==='paying'?'Paiement en cours': b.status==='finalized'?'Finalisée': b.status==='cancelled'?'Annulée': b.status)}</span></div>
+            </div>
           </div>
         ))
       }
       <Modal open={open} onClose={()=>setOpen(false)} title={`Commande #${String(current?.id||'').slice(0,8)}`} width={680}>
         {current && (
           <div className="row" style={{flexDirection:'column'}}>
-            <div className="small muted">Client</div>
+            <div className="small muted">Logement</div>
+            <div className="row" style={{gap:12,alignItems:'center'}}>
+              {current._property?.imageUrl && (
+                <img src={current._property.imageUrl} alt="" style={{width:72,height:72,objectFit:'cover',borderRadius:8}} />
+              )}
+              <div>
+                <div><strong>{current._property?.title||'Logement'}</strong></div>
+                <div className="small muted">{current._property?.address||''}</div>
+              </div>
+            </div>
+            <div className="small muted" style={{marginTop:6}}>Client</div>
             <div><strong>{current.guestname}</strong> • {current.guestemail}</div>
             <div className="small muted" style={{marginTop:6}}>Période</div>
             <div>{current.startdate} → {current.enddate} • {current.guests} voyageurs</div>
@@ -138,7 +169,14 @@ function Payments(){
   useEffect(()=>{(async()=>{
     try{
       const { data, error } = await supabase.from('bookings').select('*').eq('status','finalized').order('createdat',{ascending:false})
-      setItems(Array.isArray(data)? data:[])
+      const list = Array.isArray(data)? data:[]
+      const ids = [...new Set(list.map(b=> b.propertyid).filter(Boolean))]
+      let pmap = {}
+      if (ids.length){
+        const { data: props } = await supabase.from('properties').select('*').in('id', ids)
+        ;(props||[]).forEach(p=>{ pmap[p.id] = { id:p.id, title:p.title, address:p.address, imageUrl:p.imageurl||'' } })
+      }
+      setItems(list.map(b=> ({...b, _property: pmap[b.propertyid]})))
     } finally{ setLoading(false) }
   })()},[])
   async function save(b){
@@ -155,9 +193,17 @@ function Payments(){
       <h3>Paiements</h3>
       {loading? <div className="empty">Chargement...</div> :
         items.map(b => (
-          <div key={b.id} className="row" style={{borderBottom:'1px solid #e5e7eb',padding:'8px 0',cursor:'pointer'}} onClick={()=>openBooking(b)}>
-            <div><strong>#{String(b.id).slice(0,8)}</strong> {b.guestname} ({b.guestemail})</div>
-            <div className="small muted">{b.startdate} → {b.enddate} • <span className={`badge status ${b.status}`}>{(b.status==='pending'?'En attente': b.status==='paying'?'Paiement en cours': b.status==='finalized'?'Finalisée': b.status)}</span></div>
+          <div key={b.id} className="row" style={{borderBottom:'1px solid #e5e7eb',padding:'8px 0',cursor:'pointer',gap:12}} onClick={()=>openBooking(b)}>
+            {b._property?.imageUrl ? (
+              <img src={b._property.imageUrl} alt="" style={{width:56,height:56,objectFit:'cover',borderRadius:8}} />
+            ) : (
+              <div style={{width:56,height:56,borderRadius:8,background:'#f3f4f6'}} />
+            )}
+            <div style={{flex:1}}>
+              <div><strong>#{String(b.id).slice(0,8)}</strong> {b.guestname} ({b.guestemail})</div>
+              <div className="small muted">{b._property?.title||'Logement'} • {b._property?.address||''}</div>
+              <div className="small muted">{b.startdate} → {b.enddate} • <span className={`badge status ${b.status}`}>{(b.status==='pending'?'En attente': b.status==='paying'?'Paiement en cours': b.status==='finalized'?'Finalisée': b.status)}</span></div>
+            </div>
           </div>
         ))
       }
