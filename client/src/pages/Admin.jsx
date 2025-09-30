@@ -113,19 +113,6 @@ function Bookings(){
             <div><strong>{current.total} €</strong></div>
             <hr style={{opacity:.2, width:'100%'}}/>
             <div className="row">
-              <select className="input" value={current.status} onChange={e=>setCurrent(c=>({...c,status:e.target.value}))}>
-                <option value="pending">En attente</option>
-                <option value="paying">Paiement en cours</option>
-                <option value="finalized">Finalisé</option>
-              </select>
-              <button className="btn" onClick={async ()=>{
-                const { error } = await supabase.from('bookings').update({ status: current.status }).eq('id', current.id)
-                if (error){ toast.error('Erreur mise à jour statut: '+error.message); return }
-                setItems(list => list.map(x => x.id===current.id? { ...x, status: current.status }: x))
-                toast.success('Statut mis à jour')
-              }}>Mettre à jour le statut</button>
-            </div>
-            <div className="row">
               <input className="input" placeholder="Lien de paiement" value={current.paymentlink||''} onChange={e=>setCurrent(c=>({...c,paymentlink:e.target.value}))} />
               <button className="btn" onClick={async ()=>{
                 if(!current.paymentlink){ toast.error('Ajoutez un lien'); return }
@@ -155,6 +142,19 @@ function Bookings(){
                   toast.error('Echec envoi email: '+(detail||'Erreur inconnue'))
                 }
               }}>Envoyer lien de paiement</button>
+            </div>
+            <div className="row">
+              <select className="input" value={current.status} onChange={e=>setCurrent(c=>({...c,status:e.target.value}))}>
+                <option value="pending">En attente</option>
+                <option value="paying">Paiement en cours</option>
+                <option value="finalized">Finalisé</option>
+              </select>
+              <button className="btn" onClick={async ()=>{
+                const { error } = await supabase.from('bookings').update({ status: current.status }).eq('id', current.id)
+                if (error){ toast.error('Erreur mise à jour statut: '+error.message); return }
+                setItems(list => list.map(x => x.id===current.id? { ...x, status: current.status }: x))
+                toast.success('Statut mis à jour')
+              }}>Mettre à jour le statut</button>
             </div>
           </div>
         )}
