@@ -3,8 +3,62 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>KEITRESIDENCES</title>
+    <title>LineResidences | Locations meublées & séjours confortables</title>
+    <meta name="description" content="LineResidences - Réservez facilement des logements meublés et confortables. Disponibilités, photos, prix et réservation en ligne.">
+
+    <!-- Canonical (defined dynamically to current origin) -->
+    <link id="canonical" rel="canonical" href="/" />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="LineResidences">
+    <meta property="og:title" content="LineResidences | Locations meublées & séjours confortables">
+    <meta property="og:description" content="Réservez facilement des logements meublés et confortables. Photos, prix et réservation en ligne.">
+    <meta property="og:image" content="/logo.png">
+    <meta property="og:url" content="/">
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="LineResidences | Locations meublées & séjours confortables">
+    <meta name="twitter:description" content="Réservez facilement des logements meublés et confortables. Photos, prix et réservation en ligne.">
+    <meta name="twitter:image" content="/logo.png">
+
     <link rel="icon" href="/logo.png" />
+    <script>
+      // Set canonical and og:url to the current deployed origin
+      (function(){
+        try{
+          var canon = document.getElementById('canonical');
+          if (canon) canon.href = window.location.origin + '/';
+          var og = document.querySelector('meta[property="og:url"]');
+          if (og) og.setAttribute('content', window.location.origin + '/');
+        }catch(e){}
+      })();
+    </script>
+
+    <!-- JSON-LD Structured Data: Organization + WebSite -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      "name": "LineResidences",
+      "url": "/",
+      "logo": "/logo.png"
+    }
+    </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": "LineResidences",
+      "url": "/",
+      "potentialAction": {
+        "@type": "SearchAction",
+        "target": "/?q={search_term_string}",
+        "query-input": "required name=search_term_string"
+      }
+    }
+    </script>
   </head>
   <body>
     <div id="root"></div>
