@@ -44,7 +44,7 @@ app.use(session({
 app.use((req, res, next) => { res.locals.session = req.session || {}; next(); });
 
 // Upload media to Supabase Storage (bucket 'media')
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });
 app.post('/api/upload', upload.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file' });
@@ -55,7 +55,7 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
     const { data } = supabase.storage.from('media').getPublicUrl(key);
     res.json({ url: data.publicUrl, path: key });
   } catch (e) {
-    res.status(500).json({ error: 'Upload failed' });
+    res.status(500).json({ error: e?.message || 'Upload failed' });
   }
 });
 
@@ -205,9 +205,20 @@ app.get('/mes-reservations', async (req, res) => {
 
 // API - Properties
 app.get('/api/properties', async (req, res) => {
-  const { data, error } = await supabase.from('properties').select('*').order('createdAt', { ascending: false });
+  const { data, error } = await supabase.from('properties').select('*').order('createdat', { ascending: false });
   if (error) return res.status(500).json({ error: error.message });
-  res.json(data);
+  const mapped = (data || []).map(d => ({
+    id: d.id,
+    title: d.title,
+    description: d.description,
+    address: d.address,
+    pricePerNight: d.pricepernight,
+    imageUrl: d.imageurl,
+    videoUrl: d.videourl,
+    capacity: d.capacity,
+    createdAt: d.createdat,
+  }));
+  res.json(mapped);
 });
 
 // Notifications - backend EmailJS
@@ -281,29 +292,92 @@ app.post('/api/notify/payment-link', async (req, res) => {
   }
 });
 
+// Properties - CREATE
 app.post('/api/properties', async (req, res) => {
   const { title, description, address, pricePerNight, imageUrl, videoUrl, capacity } = req.body;
-  if (!title || !pricePerNight) return res.status(400).json({ error: 'title and pricePerNight are required' });
-  const property = { title, description: description || '', address: address || '', pricePerNight: Number(pricePerNight) || 0, imageUrl: imageUrl || '', videoUrl: videoUrl || '', capacity: Number(capacity) || 1, createdAt: new Date().toISOString() };
-  const { data, error } = await supabase.from('properties').insert(property).select('*').single();
+  if (!title || pricePerNight === undefined || pricePerNight === null) return res.status(400).json({ error: 'title and pricePerNight are required' });
+  const dbProperty = {
+    title,
+    description: description || '',
+    address: address || '',
+    pricepernight: Number(pricePerNight) || 0,
+    imageurl: imageUrl || '',
+    videourl: videoUrl || '',
+    capacity: Number(capacity) || 1,
+    createdat: new Date().toISOString(),
+  };
+  const { data, error } = await supabase.from('properties').insert(dbProperty).select('*').single();
   if (error) return res.status(500).json({ error: error.message });
-  res.status(201).json(data);
+  // map to camelCase for client
+  const mapped = {
+    id: data.id,
+    title: data.title,
+    description: data.description,
+    address: data.address,
+    pricePerNight: data.pricepernight,
+    imageUrl: data.imageurl,
+    videoUrl: data.videourl,
+    capacity: data.capacity,
+    createdAt: data.createdat,
+  };
+  res.status(201).json(mapped);
 });
 
+// Properties - UPDATE
 app.put('/api/properties/:id', async (req, res) => {
   const { id } = req.params;
   const { title, description, address, pricePerNight, imageUrl, videoUrl, capacity } = req.body;
-  const updates = { title, description, address, pricePerNight: Number(pricePerNight), imageUrl, videoUrl, capacity: Number(capacity) };
+  const updates = {
+    title,
+    description,
+    address,
+    pricepernight: pricePerNight !== undefined ? Number(pricePerNight) : undefined,
+    imageurl: imageUrl,
+    videourl: videoUrl,
+    capacity: capacity !== undefined ? Number(capacity) : undefined,
+  };
+  // remove undefined keys
+  Object.keys(updates).forEach(k => updates[k] === undefined && delete updates[k]);
   const { data, error } = await supabase.from('properties').update(updates).eq('id', id).select('*').single();
   if (error) return res.status(500).json({ error: error.message });
-  res.json(data);
+  const mapped = {
+    id: data.id,
+    title: data.title,
+    description: data.description,
+    address: data.address,
+    pricePerNight: data.pricepernight,
+    imageUrl: data.imageurl,
+    videoUrl: data.videourl,
+    capacity: data.capacity,
+    createdAt: data.createdat,
+  };
+  res.json(mapped);
 });
 
+// Properties - DELETE
 app.delete('/api/properties/:id', async (req, res) => {
   const { id } = req.params;
   const { error } = await supabase.from('properties').delete().eq('id', id);
   if (error) return res.status(500).json({ error: error.message });
   res.json({ ok: true });
+});
+
+// Properties - LIST (map to camelCase)
+app.get('/api/properties', async (req, res) => {
+  const { data, error } = await supabase.from('properties').select('*').order('createdat', { ascending: false });
+  if (error) return res.status(500).json({ error: error.message });
+  const mapped = (data || []).map(d => ({
+    id: d.id,
+    title: d.title,
+    description: d.description,
+    address: d.address,
+    pricePerNight: d.pricepernight,
+    imageUrl: d.imageurl,
+    videoUrl: d.videourl,
+    capacity: d.capacity,
+    createdAt: d.createdat,
+  }));
+  res.json(mapped);
 });
 
 // Property media (gallery)
@@ -353,6 +427,24 @@ app.post('/api/properties/:id/availability', async (req, res) => {
   const { id } = req.params;
   const { startDate, endDate } = req.body;
   if (!startDate || !endDate) return res.status(400).json({ error: 'startDate and endDate required' });
+  // Server-side overlap guard: against existing admin ranges and bookings
+  const s = startDate; const e = endDate;
+  const { data: overlaps1, error: err1 } = await supabase
+    .from('availability')
+    .select('id')
+    .eq('propertyId', id)
+    .not('startDate', 'is', null)
+    .not('endDate', 'is', null)
+    .or(`and(startDate.lte.${e},endDate.gte.${s})`);
+  const { data: overlaps2, error: err2 } = await supabase
+    .from('bookings')
+    .select('id')
+    .eq('propertyId', id)
+    .in('status', ['pending','confirmed'])
+    .or(`and(startDate.lte.${e},endDate.gte.${s})`);
+  if ((overlaps1 && overlaps1.length) || (overlaps2 && overlaps2.length)) {
+    return res.status(409).json({ error: 'Chevauchement avec des périodes existantes' });
+  }
   const { data, error } = await supabase.from('availability').insert({ propertyId: id, startDate, endDate }).select('*').single();
   if (error) return res.status(500).json({ error: error.message });
   res.status(201).json(data);
@@ -364,6 +456,22 @@ app.delete('/api/properties/:id/availability/:rangeId', async (req, res) => {
   const { error } = await supabase.from('availability').delete().eq('id', rangeId).eq('propertyId', id);
   if (error) return res.status(500).json({ error: error.message });
   res.json({ ok: true });
+});
+
+// Media reorder: accept ordered array of media IDs and update positions
+app.post('/api/properties/:id/media/reorder', async (req, res) => {
+  const { id } = req.params;
+  const { order } = req.body; // array of media IDs in desired order
+  if (!Array.isArray(order)) return res.status(400).json({ error: 'order array required' });
+  try {
+    let pos = 1;
+    for (const mediaId of order) {
+      await supabase.from('property_media').update({ position: pos++ }).eq('id', mediaId).eq('propertyId', id);
+    }
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: 'Reorder failed' });
+  }
 });
 
 // API - Bookings
@@ -384,7 +492,7 @@ app.post('/api/bookings', async (req, res) => {
   const available = await isDateRangeAvailable(propertyId, startDate, endDate);
   if (!available) return res.status(409).json({ error: 'Dates not available' });
   const nights = Math.max(1, Math.ceil((new Date(endDate) - new Date(startDate)) / (1000 * 60 * 60 * 24)));
-  const total = nights * (prop.pricePerNight || 0);
+  const total = nights * (prop.pricepernight || 0);
   const booking = { propertyId, startDate, endDate, guestName, guestEmail, guests: Number(guests) || 1, status: 'pending', total, createdAt: new Date().toISOString(), paymentLink: '' };
   const { data, error } = await supabase.from('bookings').insert(booking).select('*').single();
   if (error) return res.status(500).json({ error: error.message });
@@ -408,6 +516,20 @@ app.post('/api/bookings/:id/payment-link', async (req, res) => {
   res.json(data);
 });
 
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+// Session info for SPA
+app.get('/api/session', (req, res) => {
+  res.json({ user: req.session?.user || null });
 });
+
+app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
+
+// Serve React SPA (built) when enabled
+try {
+  const clientDir = path.join(__dirname, 'client', 'dist');
+  if (process.env.SERVE_CLIENT === 'true') {
+    app.use(express.static(clientDir));
+    app.get(/^(?!\/api).*/, (req, res) => {
+      res.sendFile(path.join(clientDir, 'index.html'));
+    });
+  }
+} catch {}

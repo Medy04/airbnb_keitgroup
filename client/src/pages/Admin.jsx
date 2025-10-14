@@ -24,9 +24,99 @@ function Tabs({ tabs, value, onChange }){
 function Bookings(){
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
+  const [purging, setPurging] = useState(false)
   const [open, setOpen] = useState(false)
   const [current, setCurrent] = useState(null)
   const toast = useToast()
+
+  // Fonction pour exporter les commandes en CSV
+  const exportToCSV = (bookings) => {
+    if (!bookings.length) return;
+    
+    // Créer un nom de fichier avec le mois et l'année
+    const date = new Date();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    const filename = `commandes_${month}_${year}.csv`;
+    
+    // En-têtes CSV
+    let csvContent = 'ID,Client,Email,Logement,Date début,Date fin,Statut,Montant (€),Date de création\n';
+    
+    // Ajouter chaque commande au CSV
+    bookings.forEach(booking => {
+      const row = [
+        booking.id,
+        `"${booking.guestname || ''}"`,
+        `"${booking.guestemail || ''}"`,
+        `"${booking._property?.title || 'Inconnu'}"`,
+        booking.startdate,
+        booking.enddate,
+        booking.status,
+        booking.total || '0',
+        new Date(booking.createdat).toLocaleDateString('fr-FR')
+      ];
+      csvContent += row.join(',') + '\n';
+    });
+    
+    // Créer et déclencher le téléchargement
+    const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+  
+  // Fonction pour purger les commandes de plus de 2 mois
+  const purgeOldBookings = async () => {
+    if (!window.confirm('Voulez-vous vraiment purger les commandes traitées de plus de 2 mois ? Une sauvegarde CSV sera créée avant la suppression.')) {
+      return;
+    }
+    
+    setPurging(true);
+    try {
+      // Calculer la date d'il y a 2 mois
+      const twoMonthsAgo = new Date();
+      twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
+      
+      // Récupérer les commandes finalisées de plus de 2 mois
+      const { data: oldBookings, error } = await supabase
+        .from('bookings')
+        .select('*')
+        .lte('createdat', twoMonthsAgo.toISOString())
+        .in('status', ['finalized', 'cancelled']);
+      
+      if (error) throw error;
+      
+      if (!oldBookings || oldBookings.length === 0) {
+        toast.info('Aucune commande à purger');
+        return;
+      }
+      
+      // Exporter les anciennes commandes en CSV
+      exportToCSV(oldBookings);
+      
+      // Supprimer les commandes de la base de données
+      const { error: deleteError } = await supabase
+        .from('bookings')
+        .delete()
+        .in('id', oldBookings.map(b => b.id));
+      
+      if (deleteError) throw deleteError;
+      
+      // Mettre à jour l'interface
+      setItems(prev => prev.filter(item => !oldBookings.some(b => b.id === item.id)));
+      toast.success(`${oldBookings.length} commandes purgées avec succès`);
+      
+    } catch (error) {
+      console.error('Erreur lors de la purge des commandes:', error);
+      toast.error('Erreur lors de la purge: ' + (error.message || 'Erreur inconnue'));
+    } finally {
+      setPurging(false);
+    }
+  };
   useEffect(()=>{(async()=>{
     try{
       const { data, error } = await supabase.from('bookings').select('*').order('createdat', { ascending:false })
@@ -73,7 +163,17 @@ function Bookings(){
   function openBooking(b){ setCurrent(b); setOpen(true) }
   return (
     <section className="card" style={{padding:16}}>
-      <h3>Commandes</h3>
+      <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px'}}>
+        <h3 style={{margin: 0}}>Commandes</h3>
+        <button 
+          className="btn btn-danger" 
+          onClick={purgeOldBookings}
+          disabled={purging}
+          style={{backgroundColor: '#dc3545', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer'}}
+        >
+          {purging ? 'Traitement...' : 'Purger les anciennes commandes'}
+        </button>
+      </div>
       {loading? <div className="empty">Chargement...</div> :
         items.map(b => (
           <div key={b.id} className="row" style={{borderBottom:'1px solid #e5e7eb',padding:'8px 0',cursor:'pointer',gap:12}} onClick={()=>openBooking(b)}>

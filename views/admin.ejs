@@ -42,6 +42,15 @@
           <input type="file" id="add-video-file" accept="video/*" />
           <button type="button" class="btn" onclick="uploadMedia('#add-video-file','videoUrl')"><i class="ti ti-upload"></i> Uploader vidéo</button>
         </div>
+        <hr style="opacity:.15;margin:12px 0" />
+        <div>
+          <div class="muted small" style="margin-bottom:6px"><i class="ti ti-calendar"></i> Disponibilité initiale (optionnel)</div>
+          <div class="row">
+            <input class="input" name="avStart" placeholder="Début (YYYY-MM-DD)" />
+            <input class="input" name="avEnd" placeholder="Fin (YYYY-MM-DD)" />
+          </div>
+          <div id="add-availability-calendar"></div>
+        </div>
         <button class="btn">Ajouter</button>
       </form>
       <div id="properties-list" style="margin-top:12px"></div>

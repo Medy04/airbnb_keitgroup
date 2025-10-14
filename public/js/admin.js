@@ -86,9 +86,14 @@ async function updateBookingStatus(id, status){
 }
 
 async function renderPayments(){
-  const bookings = await fetchBookings();
+  const bookings = await fetchBookings().catch(()=>[]);
   const el = q('payments-list');
   el.innerHTML = '';
+  if (!Array.isArray(bookings)) {
+    console.warn('Failed to load bookings for payments:', bookings);
+    el.innerHTML = '<div class="empty">Impossible de charger les paiements (voir console). Réessayez plus tard.</div>';
+    return;
+  }
   bookings.filter(b => b.status === 'pending').slice().reverse().forEach(b => {
     const div = document.createElement('div');
     div.className = 'item';
@@ -131,13 +136,47 @@ async function addProperty(e){
   const form = e.target;
   const data = Object.fromEntries(new FormData(form).entries());
   const res = await fetch('/api/properties', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data) });
-  if (!res.ok){ alert('Erreur ajout logement'); return false; }
+  let created = null;
+  if (!res.ok){
+    let msg = 'Erreur ajout logement';
+    try { const j = await res.json(); if (j && j.error) msg += `: ${j.error}`; } catch {}
+    alert(msg);
+    return false;
+  }
+  try { created = await res.json(); } catch {}
+  // If admin provided an availability range at creation, push it now
+  const avStart = (form.querySelector('[name="avStart"]')?.value||'').trim();
+  const avEnd = (form.querySelector('[name="avEnd"]')?.value||'').trim();
+  if (created && created.id && avStart && avEnd) {
+    await fetch(`/api/properties/${created.id}/availability`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ startDate: avStart, endDate: avEnd }) });
+  }
   form.reset();
   alert('Logement ajouté.');
   // optional refresh
   renderProperties();
   return false;
 }
+
+// Initialize add-property inline calendar and inputs
+document.addEventListener('DOMContentLoaded', () => {
+  const start = document.querySelector('#add-property-form [name="avStart"]');
+  const end = document.querySelector('#add-property-form [name="avEnd"]');
+  const cal = document.getElementById('add-availability-calendar');
+  if (window.AirDatepicker && cal) {
+    new AirDatepicker(cal, {
+      inline: true,
+      range: true,
+      locale: AirDatepicker.locales.fr,
+      onSelect({date, formattedDate}){
+        if (Array.isArray(formattedDate)){
+          start.value = formattedDate[0] || '';
+          end.value = formattedDate[1] || '';
+        }
+      },
+      dateFormat: 'yyyy-MM-dd'
+    });
+  }
+});
 
 async function renderProperties(){
   const res = await fetch('/api/properties');
@@ -232,8 +271,8 @@ async function renderProperties(){
     const endInput = div.querySelector('[data-av-end]');
     let dpStart = null, dpEnd = null;
     if (window.AirDatepicker) {
-      dpStart = new AirDatepicker(startInput, { autoClose: true, dateFormat: 'yyyy-MM-dd' });
-      dpEnd = new AirDatepicker(endInput, { autoClose: true, dateFormat: 'yyyy-MM-dd' });
+      dpStart = new AirDatepicker(startInput, { autoClose: true, dateFormat: 'yyyy-MM-dd', locale: AirDatepicker.locales.fr });
+      dpEnd = new AirDatepicker(endInput, { autoClose: true, dateFormat: 'yyyy-MM-dd', locale: AirDatepicker.locales.fr });
     }
     let cachedRanges = [];
     async function refreshBlocked(){
@@ -251,6 +290,32 @@ async function renderProperties(){
           const res = await fetch(`/api/properties/${p.id}/availability/${rg.id}`, { method:'DELETE' });
           if (!res.ok){ alert('Suppression échouée'); return; }
           refreshBlocked();
+    // Inline availability calendar visualization
+    const avInline = document.createElement('div');
+    avInline.className = 'inline-calendar';
+    div.appendChild(avInline);
+    function renderInlineCalendar(ranges){
+      if (!window.AirDatepicker) return;
+      new AirDatepicker(avInline, {
+        inline: true,
+        range: false,
+        locale: AirDatepicker.locales.fr,
+        onRenderCell: ({date}) => {
+          const t = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+          const blocked = (ranges||[]).some(r => {
+            const bs = new Date(r.startDate).setHours(0,0,0,0);
+            const be = new Date(r.endDate).setHours(0,0,0,0);
+            return t >= bs && t <= be;
+          });
+          return blocked ? { disabled: true, classes: 'blocked-day' } : {};
+        }
+      });
+    }
+    (async ()=>{
+      const r = await fetch(`/api/properties/${p.id}/blocked`);
+      const ranges = await r.json();
+      renderInlineCalendar(ranges||[]);
+    })();
         };
         avList.appendChild(row);
       });
@@ -286,6 +351,7 @@ async function renderProperties(){
       items.forEach(m => {
         const row = document.createElement('div');
         row.style.display='flex'; row.style.alignItems='center'; row.style.gap='8px'; row.style.margin='6px 0';
+        row.dataset.id = m.id;
         const thumb = m.type === 'image' ? `<img src="${m.url}" alt="" style="width:60px;height:40px;object-fit:cover;border-radius:6px;border:1px solid #253048"/>` : `<span class="badge">vidéo</span>`;
         row.innerHTML = `${thumb} <a href="${m.url}" target="_blank" rel="noopener">${m.url}</a> <button class="btn" data-id="${m.id}"><i class="ti ti-trash"></i> Supprimer</button>`;
         row.querySelector('button').onclick = async ()=>{
@@ -295,6 +361,18 @@ async function renderProperties(){
         };
         mediaList.appendChild(row);
       });
+      // Enable drag & drop reorder if Sortable is available
+      if (window.Sortable && mediaList && !mediaList._sortableInit) {
+        mediaList._sortableInit = true;
+        new Sortable(mediaList, {
+          animation: 150,
+          ghostClass: 'drag-ghost',
+          onEnd: async () => {
+            const order = Array.from(mediaList.children).map(ch => ch.dataset.id).filter(Boolean);
+            await fetch(`/api/properties/${p.id}/media/reorder`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ order }) });
+          }
+        });
+      }
     }
     refreshMedia();
     div.querySelector('[data-action="add-media-image"]').onclick = async () => {
