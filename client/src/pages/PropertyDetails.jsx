@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import BookingWidget from '../components/BookingWidget.jsx'
 import BackButton from '../components/BackButton.jsx'
 import Modal from '../components/Modal.jsx'
+import Reviews from '../components/Reviews.jsx'
 
 export default function PropertyDetails(){
   const { id } = useParams()
@@ -86,6 +87,8 @@ export default function PropertyDetails(){
       </div>
 
       <BookingWidget property={p} onBooked={()=>{}} />
+
+      <Reviews propertyId={p.id} />
 
       <Modal open={!!preview} onClose={()=>setPreview('')} title={p.title} width={900}>
         {preview && (

@@ -165,6 +165,13 @@ export default function MyReservations(){
                       }}>Annuler</button>
                     </div>
                   )}
+                  {current.status==='finalized' && (
+                    <div style={{marginTop:12}}>
+                      <a className="btn" href={`/property/${current.propertyid}#reviews`} onClick={()=> setOpen(false)}>
+                        Laisser un avis
+                      </a>
+                    </div>
+                  )}
                   {current.paymentlink && current.status==='paying' && (
                     <div style={{marginTop:10}}>
                       <a className="btn" href={current.paymentlink} target="_blank" rel="noreferrer">Payer maintenant</a>

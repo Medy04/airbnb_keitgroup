@@ -16,6 +16,9 @@ export default function PropertyCard({ p }){
         <div className="row between">
           <h3 style={{margin:'6px 0'}}>{p.title}</h3>
         </div>
+        {(p.avgRating>0) && (
+          <div className="small" style={{marginBottom:6}}>⭐ {p.avgRating} · {p.reviewCount||0}</div>
+        )}
         <div className="muted small" style={{marginBottom:8}}>{p.address || 'Adresse non renseignée'}</div>
         {(p.availableFrom && p.availableTo) && (
           <div className="badge" style={{marginBottom:8}}>Disponible du {p.availableFrom} au {p.availableTo}</div>
