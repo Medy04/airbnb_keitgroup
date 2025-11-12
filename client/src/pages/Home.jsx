@@ -23,9 +23,10 @@ export default function Home(){
           setUserEmail(email)
         }catch{}
 
-        const res = await fetch('/api/properties')
+        const API = import.meta.env.VITE_API_BASE || ''
+        const res = await fetch(`${API}/api/properties`)
         if (!res.ok) throw new Error('Failed to load properties')
-        let list = await res.json()
+        let list = await res.json().catch(()=>[])
         list = Array.isArray(list)? list: []
         // Fetch reviews to compute avg rating and count for each property
         const ids = list.map(p=>p.id).filter(Boolean)

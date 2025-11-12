@@ -40,6 +40,15 @@ app.use(session({
   saveUninitialized: false,
 }));
 
+// CORS (allow frontend hosted on another domain like Vercel)
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', process.env.CORS_ORIGIN || '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  next();
+});
+
 // Make session available to EJS views
 app.use((req, res, next) => { res.locals.session = req.session || {}; next(); });
 
@@ -217,8 +226,32 @@ app.get('/api/properties', async (req, res) => {
     videoUrl: d.videourl,
     capacity: d.capacity,
     createdAt: d.createdat,
+    availableFrom: d.available_from,
+    availableTo: d.available_to,
   }));
   res.json(mapped);
+});
+
+// Single property
+app.get('/api/properties/:id', async (req, res) => {
+  const { id } = req.params;
+  const { data: d, error } = await supabase.from('properties').select('*').eq('id', id).maybeSingle();
+  if (error) return res.status(500).json({ error: error.message || 'Query failed' });
+  if (!d) return res.status(404).json({ error: 'Property not found' });
+  const p = {
+    id: d.id,
+    title: d.title,
+    description: d.description,
+    address: d.address,
+    pricePerNight: d.pricepernight,
+    imageUrl: d.imageurl,
+    videoUrl: d.videourl,
+    capacity: d.capacity,
+    createdAt: d.createdat,
+    availableFrom: d.available_from,
+    availableTo: d.available_to,
+  };
+  res.json(p);
 });
 
 // Notifications - backend EmailJS
@@ -294,7 +327,7 @@ app.post('/api/notify/payment-link', async (req, res) => {
 
 // Properties - CREATE
 app.post('/api/properties', async (req, res) => {
-  const { title, description, address, pricePerNight, imageUrl, videoUrl, capacity } = req.body;
+  const { title, description, address, pricePerNight, imageUrl, videoUrl, capacity, availableFrom, availableTo } = req.body;
   if (!title || pricePerNight === undefined || pricePerNight === null) return res.status(400).json({ error: 'title and pricePerNight are required' });
   const dbProperty = {
     title,
@@ -305,6 +338,8 @@ app.post('/api/properties', async (req, res) => {
     videourl: videoUrl || '',
     capacity: Number(capacity) || 1,
     createdat: new Date().toISOString(),
+    available_from: availableFrom || null,
+    available_to: availableTo || null,
   };
   const { data, error } = await supabase.from('properties').insert(dbProperty).select('*').single();
   if (error) return res.status(500).json({ error: error.message });
@@ -319,6 +354,8 @@ app.post('/api/properties', async (req, res) => {
     videoUrl: data.videourl,
     capacity: data.capacity,
     createdAt: data.createdat,
+    availableFrom: data.available_from,
+    availableTo: data.available_to,
   };
   res.status(201).json(mapped);
 });
@@ -326,7 +363,7 @@ app.post('/api/properties', async (req, res) => {
 // Properties - UPDATE
 app.put('/api/properties/:id', async (req, res) => {
   const { id } = req.params;
-  const { title, description, address, pricePerNight, imageUrl, videoUrl, capacity } = req.body;
+  const { title, description, address, pricePerNight, imageUrl, videoUrl, capacity, availableFrom, availableTo } = req.body;
   const updates = {
     title,
     description,
@@ -335,6 +372,8 @@ app.put('/api/properties/:id', async (req, res) => {
     imageurl: imageUrl,
     videourl: videoUrl,
     capacity: capacity !== undefined ? Number(capacity) : undefined,
+    available_from: availableFrom !== undefined ? (availableFrom || null) : undefined,
+    available_to: availableTo !== undefined ? (availableTo || null) : undefined,
   };
   // remove undefined keys
   Object.keys(updates).forEach(k => updates[k] === undefined && delete updates[k]);
@@ -383,7 +422,11 @@ app.get('/api/properties', async (req, res) => {
 // Property media (gallery)
 app.get('/api/properties/:id/media', async (req, res) => {
   const { id } = req.params;
-  const { data, error } = await supabase.from('property_media').select('*').eq('propertyId', id).order('createdAt', { ascending: false });
+  const { data, error } = await supabase
+    .from('property_media')
+    .select('*')
+    .eq('propertyid', id)
+    .order('createdat', { ascending: false });
   if (error) return res.status(500).json({ error: error.message });
   res.json(data || []);
 });
@@ -392,14 +435,22 @@ app.post('/api/properties/:id/media', async (req, res) => {
   const { id } = req.params;
   const { url, type } = req.body; // type: 'image' | 'video'
   if (!url || !type) return res.status(400).json({ error: 'url and type are required' });
-  const { data, error } = await supabase.from('property_media').insert({ propertyId: id, url, type }).select('*').single();
+  const { data, error } = await supabase
+    .from('property_media')
+    .insert({ propertyid: id, url, type })
+    .select('*')
+    .single();
   if (error) return res.status(500).json({ error: error.message });
   res.status(201).json(data);
 });
 
 app.delete('/api/properties/:id/media/:mediaId', async (req, res) => {
   const { id, mediaId } = req.params;
-  const { error } = await supabase.from('property_media').delete().eq('id', mediaId).eq('propertyId', id);
+  const { error } = await supabase
+    .from('property_media')
+    .delete()
+    .eq('id', mediaId)
+    .eq('propertyid', id);
   if (error) return res.status(500).json({ error: error.message });
   res.json({ ok: true });
 });
@@ -410,12 +461,12 @@ app.get('/api/properties/:id/blocked', async (req, res) => {
   const { id } = req.params;
   try {
     const [{ data: bookings }, { data: unav }] = await Promise.all([
-      supabase.from('bookings').select('startDate,endDate,status').eq('propertyId', id).in('status', ['pending','confirmed']),
-      supabase.from('availability').select('id,startDate,endDate').eq('propertyId', id)
+      supabase.from('bookings').select('startdate,enddate,status').eq('propertyid', id).in('status', ['pending','confirmed']),
+      supabase.from('availability').select('id,startdate,enddate').eq('propertyid', id)
     ]);
     const ranges = [];
-    (bookings || []).forEach(b => ranges.push({ startDate: b.startDate, endDate: b.endDate, source: 'booking' }));
-    (unav || []).forEach(r => ranges.push({ id: r.id, startDate: r.startDate, endDate: r.endDate, source: 'unavailable' }));
+    (bookings || []).forEach(b => ranges.push({ startDate: b.startdate, endDate: b.enddate, source: 'booking' }));
+    (unav || []).forEach(r => ranges.push({ id: r.id, startDate: r.startdate, endDate: r.enddate, source: 'unavailable' }));
     res.json(ranges);
   } catch (e) {
     res.status(500).json({ error: 'Failed to load blocked ranges' });
@@ -432,20 +483,26 @@ app.post('/api/properties/:id/availability', async (req, res) => {
   const { data: overlaps1, error: err1 } = await supabase
     .from('availability')
     .select('id')
-    .eq('propertyId', id)
-    .not('startDate', 'is', null)
-    .not('endDate', 'is', null)
-    .or(`and(startDate.lte.${e},endDate.gte.${s})`);
+    .eq('propertyid', id)
+    .not('startdate', 'is', null)
+    .not('enddate', 'is', null)
+    .lte('startdate', e)
+    .gte('enddate', s);
   const { data: overlaps2, error: err2 } = await supabase
     .from('bookings')
     .select('id')
-    .eq('propertyId', id)
+    .eq('propertyid', id)
     .in('status', ['pending','confirmed'])
-    .or(`and(startDate.lte.${e},endDate.gte.${s})`);
+    .lte('startdate', e)
+    .gte('enddate', s);
   if ((overlaps1 && overlaps1.length) || (overlaps2 && overlaps2.length)) {
     return res.status(409).json({ error: 'Chevauchement avec des périodes existantes' });
   }
-  const { data, error } = await supabase.from('availability').insert({ propertyId: id, startDate, endDate }).select('*').single();
+  const { data, error } = await supabase
+    .from('availability')
+    .insert({ propertyid: id, startdate: startDate, enddate: endDate })
+    .select('*')
+    .single();
   if (error) return res.status(500).json({ error: error.message });
   res.status(201).json(data);
 });
@@ -453,7 +510,7 @@ app.post('/api/properties/:id/availability', async (req, res) => {
 // DELETE an unavailable range
 app.delete('/api/properties/:id/availability/:rangeId', async (req, res) => {
   const { id, rangeId } = req.params;
-  const { error } = await supabase.from('availability').delete().eq('id', rangeId).eq('propertyId', id);
+  const { error } = await supabase.from('availability').delete().eq('id', rangeId).eq('propertyid', id);
   if (error) return res.status(500).json({ error: error.message });
   res.json({ ok: true });
 });
@@ -466,7 +523,11 @@ app.post('/api/properties/:id/media/reorder', async (req, res) => {
   try {
     let pos = 1;
     for (const mediaId of order) {
-      await supabase.from('property_media').update({ position: pos++ }).eq('id', mediaId).eq('propertyId', id);
+      await supabase
+        .from('property_media')
+        .update({ position: pos++ })
+        .eq('id', mediaId)
+        .eq('propertyid', id);
     }
     res.json({ ok: true });
   } catch (e) {
@@ -514,6 +575,120 @@ app.post('/api/bookings/:id/payment-link', async (req, res) => {
   const { data, error } = await supabase.from('bookings').update({ paymentLink: paymentLink || '', updatedAt: new Date().toISOString() }).eq('id', id).select('*').single();
   if (error) return res.status(404).json({ error: 'Booking not found' });
   res.json(data);
+});
+
+// Finance - Expenses CRUD
+app.get('/api/expenses', async (req, res) => {
+  try{
+    const { propertyId, from, to } = req.query;
+    let q = supabase.from('expenses').select('*').order('date', { ascending: false });
+    if (propertyId) q = q.eq('propertyid', propertyId);
+    if (from) q = q.gte('date', from);
+    if (to) q = q.lte('date', to);
+    const { data, error } = await q;
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data || []);
+  } catch(e){ res.status(500).json({ error: 'Failed to load expenses' }) }
+});
+
+app.post('/api/expenses', async (req, res) => {
+  try{
+    const { propertyId, date, amount, label } = req.body;
+    if (!date || amount === undefined || amount === null) return res.status(400).json({ error: 'date and amount are required' });
+    const payload = {
+      propertyid: propertyId || null,
+      date,
+      amount: Number(amount) || 0,
+      label: label || '',
+      createdat: new Date().toISOString(),
+    };
+    const { data, error } = await supabase.from('expenses').insert(payload).select('*').single();
+    if (error) return res.status(500).json({ error: error.message });
+    res.status(201).json(data);
+  } catch(e){ res.status(500).json({ error: 'Failed to create expense' }) }
+});
+
+app.delete('/api/expenses/:id', async (req, res) => {
+  try{
+    const { id } = req.params;
+    const { error } = await supabase.from('expenses').delete().eq('id', id);
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ ok: true });
+  } catch(e){ res.status(500).json({ error: 'Failed to delete expense' }) }
+});
+
+// Finance - Summary and series
+// Returns per-month summary for a year, or for a specific month if month provided
+// Query: year=YYYY [& month=1-12]
+app.get('/api/finance/summary', async (req, res) => {
+  try{
+    const year = Number(req.query.year) || new Date().getFullYear();
+    const month = req.query.month ? Number(req.query.month) : null; // 1-12
+
+    // Load finalized bookings in range
+    const start = new Date(Date.UTC(year, month? month-1: 0, 1)).toISOString().slice(0,10);
+    const end = new Date(Date.UTC(year, month? month: 12, 0)).toISOString().slice(0,10); // last day
+    const { data: bookings, error: bErr } = await supabase
+      .from('bookings')
+      .select('id,total,startdate,enddate,status')
+      .eq('status','finalized')
+      .gte('startdate', start)
+      .lte('startdate', end);
+    if (bErr) return res.status(500).json({ error: bErr.message });
+
+    // Load expenses in range
+    const { data: expenses, error: eErr } = await supabase
+      .from('expenses')
+      .select('id,amount,date,propertyid,label')
+      .gte('date', start)
+      .lte('date', end);
+    if (eErr) return res.status(500).json({ error: eErr.message });
+
+    // Aggregate
+    const months = Array.from({length: month? 1: 12}, (_,i)=> month? month: i+1);
+    const revenueByMonth = {};
+    const expenseByMonth = {};
+    months.forEach(m=>{ revenueByMonth[m]=0; expenseByMonth[m]=0; });
+    (bookings||[]).forEach(b=>{
+      const m = new Date(b.startdate).getUTCMonth()+1;
+      if (revenueByMonth[m] !== undefined) revenueByMonth[m] += Number(b.total)||0;
+    });
+    (expenses||[]).forEach(x=>{
+      const m = new Date(x.date).getUTCMonth()+1;
+      if (expenseByMonth[m] !== undefined) expenseByMonth[m] += Number(x.amount)||0;
+    });
+    const series = months.map(m=>({ month: m, revenue: revenueByMonth[m]||0, expenses: expenseByMonth[m]||0, net: (revenueByMonth[m]||0)-(expenseByMonth[m]||0) }));
+    const totals = series.reduce((acc,cur)=>({ revenue: acc.revenue+cur.revenue, expenses: acc.expenses+cur.expenses, net: acc.net+cur.net }), { revenue:0, expenses:0, net:0 });
+    res.json({ year, month: month||null, series, totals });
+  } catch(e){ res.status(500).json({ error: 'Failed to compute summary' }) }
+});
+
+// Finance - Revenue line series by date range
+// Query: from=YYYY-MM-DD&to=YYYY-MM-DD
+app.get('/api/finance/revenue-series', async (req, res) => {
+  try{
+    const from = req.query.from;
+    const to = req.query.to;
+    if (!from || !to) return res.status(400).json({ error: 'from and to are required' });
+    const { data: bookings, error } = await supabase
+      .from('bookings')
+      .select('startdate,total,status')
+      .eq('status','finalized')
+      .gte('startdate', from)
+      .lte('startdate', to)
+      .order('startdate', { ascending: true });
+    if (error) return res.status(500).json({ error: error.message });
+    // Group by YYYY-MM
+    const byMonth = {};
+    (bookings||[]).forEach(b=>{
+      const d = new Date(b.startdate);
+      const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}`;
+      byMonth[key] = (byMonth[key]||0) + Number(b.total||0);
+    });
+    const keys = Object.keys(byMonth).sort();
+    const points = keys.map(k=>({ period: k, revenue: byMonth[k] }));
+    res.json({ from, to, points });
+  } catch(e){ res.status(500).json({ error: 'Failed to compute revenue series' }) }
 });
 
 // Session info for SPA

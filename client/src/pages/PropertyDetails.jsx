@@ -15,14 +15,15 @@ export default function PropertyDetails(){
   const [preview, setPreview] = useState('')
 
   useEffect(()=>{
-    (async()=>{
+    (async ()=>{
       try{
-        const r = await fetch(`/api/properties/${id}`)
-        if (!r.ok) throw new Error('Property not found')
-        const property = await r.json()
+        const API = import.meta.env.VITE_API_BASE || ''
+        const res = await fetch(`${API}/api/properties/${id}`)
+        if (!res.ok) throw new Error('Property not found')
+        const property = await res.json()
         setP(property)
-        const rm = await fetch(`/api/properties/${id}/media`)
-        const items = await rm.json().catch(()=>[])
+        const mres = await fetch(`${API}/api/properties/${id}/media`)
+        const items = await mres.json().catch(()=>[])
         setMedia(Array.isArray(items)? items: [])
       }catch(e){ setError(e.message) }
       finally{ setLoading(false) }

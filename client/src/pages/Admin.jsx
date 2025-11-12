@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { IconListDetails, IconCreditCard, IconBuilding } from '@tabler/icons-react'
+import { IconListDetails, IconCreditCard, IconBuilding, IconChartLine } from '@tabler/icons-react'
 import AdminPropertyItem from '../components/AdminPropertyItem.jsx'
 import DateRangeInputs from '../components/DateRangeInputs.jsx'
 import { supabase } from '../lib/supabase.js'
@@ -20,6 +20,158 @@ function Tabs({ tabs, value, onChange }){
         </button>
       ))}
     </div>
+  )
+}
+
+function Compta(){
+  const [year, setYear] = useState(new Date().getFullYear())
+  const [month, setMonth] = useState('')
+  const [summary, setSummary] = useState({ series: [], totals: { revenue:0, expenses:0, net:0 }, year: new Date().getFullYear(), month: null })
+  const [from, setFrom] = useState(new Date(new Date().getFullYear(), 0, 1).toISOString().slice(0,10))
+  const [to, setTo] = useState(new Date().toISOString().slice(0,10))
+  const [points, setPoints] = useState([])
+  const [properties, setProperties] = useState([])
+  const [expenses, setExpenses] = useState([])
+  const [expForm, setExpForm] = useState({ propertyId:'', date:'', amount:'', label:'' })
+  const [loading, setLoading] = useState(false)
+
+  async function loadSummary(){
+    setLoading(true)
+    try{
+      const params = new URLSearchParams({ year: String(year) })
+      if (month) params.set('month', String(month))
+      const res = await fetch(`/api/finance/summary?${params.toString()}`)
+      const data = await res.json().catch(()=>({ series:[], totals:{revenue:0,expenses:0,net:0} }))
+      setSummary(data)
+    } finally{ setLoading(false) }
+  }
+  async function loadSeries(){
+    const qs = new URLSearchParams({ from, to })
+    const res = await fetch(`/api/finance/revenue-series?${qs.toString()}`)
+    const data = await res.json().catch(()=>({ points: [] }))
+    setPoints(data.points||[])
+  }
+  async function loadProps(){
+    const res = await fetch('/api/properties')
+    setProperties(await res.json().catch(()=>[]))
+  }
+  async function loadExpenses(){
+    const qs = new URLSearchParams({ from, to })
+    const res = await fetch(`/api/expenses?${qs.toString()}`)
+    setExpenses(await res.json().catch(()=>[]))
+  }
+  useEffect(()=>{ loadProps() },[])
+  useEffect(()=>{ loadSummary() },[year, month])
+  useEffect(()=>{ loadSeries(); loadExpenses() },[from, to])
+
+  async function addExpense(e){
+    e.preventDefault()
+    const payload = {
+      propertyId: expForm.propertyId || null,
+      date: expForm.date,
+      amount: Number(expForm.amount)||0,
+      label: expForm.label||''
+    }
+    const res = await fetch('/api/expenses', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) })
+    if (!res.ok){ alert('Erreur ajout dépense'); return }
+    setExpForm({ propertyId:'', date:'', amount:'', label:'' })
+    await loadExpenses(); await loadSummary()
+  }
+  async function deleteExpense(id){
+    if (!confirm('Supprimer cette dépense ?')) return
+    const res = await fetch(`/api/expenses/${id}`, { method:'DELETE' })
+    if (!res.ok){ alert('Erreur suppression'); return }
+    await loadExpenses(); await loadSummary()
+  }
+
+  // Build simple line chart with SVG from points
+  const chart = (()=>{
+    const data = points||[]
+    if (!data.length) return null
+    const w=600, h=200, pad=24
+    const maxY = Math.max(...data.map(p=>p.revenue), 1)
+    const stepX = (w - pad*2) / Math.max(1, data.length-1)
+    const toX = i => pad + i*stepX
+    const toY = v => h - pad - (v/maxY)*(h - pad*2)
+    const d = data.map((p,i)=> `${i?'L':'M'}${toX(i)},${toY(p.revenue)}`).join(' ')
+    return (
+      <svg width={w} height={h} style={{width:'100%', maxWidth:600, background:'#fafafa', borderRadius:8}}>
+        <polyline fill="none" stroke="#3b82f6" strokeWidth="2" points={data.map((p,i)=>`${toX(i)},${toY(p.revenue)}`).join(' ')} />
+        <path d={d} fill="none" stroke="#3b82f6" strokeWidth="2" />
+      </svg>
+    )
+  })()
+
+  return (
+    <section className="card" style={{padding:16}}>
+      <div className="row" style={{alignItems:'center', gap:12}}>
+        <h3 style={{margin:0}}>Comptabilité</h3>
+        <div className="row" style={{marginLeft:'auto', gap:8}}>
+          <select className="input" value={month} onChange={e=>setMonth(e.target.value)}>
+            <option value="">Année entière</option>
+            {Array.from({length:12},(_,i)=>i+1).map(m=> <option key={m} value={m}>{m}</option>)}
+          </select>
+          <input className="input" type="number" value={year} onChange={e=>setYear(Number(e.target.value)||new Date().getFullYear())} style={{width:120}} />
+          <button className="btn" onClick={loadSummary} disabled={loading}>Actualiser</button>
+        </div>
+      </div>
+
+      <div className="grid" style={{gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))',marginTop:12}}>
+        <div className="card" style={{padding:12}}>
+          <div className="small muted">Revenus</div>
+          <div style={{fontSize:22,fontWeight:700}}>{summary?.totals?.revenue||0} €</div>
+        </div>
+        <div className="card" style={{padding:12}}>
+          <div className="small muted">Dépenses</div>
+          <div style={{fontSize:22,fontWeight:700}}>{summary?.totals?.expenses||0} €</div>
+        </div>
+        <div className="card" style={{padding:12}}>
+          <div className="small muted">Bénéfice net</div>
+          <div style={{fontSize:22,fontWeight:700}}>{summary?.totals?.net||0} €</div>
+        </div>
+      </div>
+
+      <h4 style={{marginTop:16}}>Courbe des gains</h4>
+      <div className="row" style={{gap:8, marginBottom:8}}>
+        <input className="input" type="date" value={from} onChange={e=>setFrom(e.target.value)} />
+        <input className="input" type="date" value={to} onChange={e=>setTo(e.target.value)} />
+        <button className="btn" onClick={()=>{ loadSeries(); }}>Afficher</button>
+      </div>
+      <div>{chart || <div className="empty">Aucune donnée</div>}</div>
+
+      <h4 style={{marginTop:16}}>Dépenses</h4>
+      <form className="row" onSubmit={addExpense} style={{gap:8, alignItems:'center', marginBottom:8}}>
+        <select className="input" value={expForm.propertyId} onChange={e=>setExpForm(f=>({...f,propertyId:e.target.value}))} style={{minWidth:180}}>
+          <option value="">— Logement (optionnel) —</option>
+          {properties.map(p=> <option key={p.id} value={p.id}>{p.title}</option>)}
+        </select>
+        <input className="input" type="date" required value={expForm.date} onChange={e=>setExpForm(f=>({...f,date:e.target.value}))} />
+        <input className="input" type="number" step="0.01" required placeholder="Montant" value={expForm.amount} onChange={e=>setExpForm(f=>({...f,amount:e.target.value}))} style={{width:140}} />
+        <input className="input" placeholder="Libellé" value={expForm.label} onChange={e=>setExpForm(f=>({...f,label:e.target.value}))} />
+        <button className="btn" type="submit">Ajouter</button>
+      </form>
+
+      <div className="card" style={{padding:12}}>
+        {expenses.length? expenses.map(x=> (
+          <div key={x.id} className="row" style={{justifyContent:'space-between', borderBottom:'1px solid #eee', padding:'6px 0'}}>
+            <div className="small">{x.date} • <strong>{Number(x.amount).toFixed(2)} €</strong> • {x.label||''}</div>
+            <button className="btn" onClick={()=>deleteExpense(x.id)} style={{background:'#ef4444'}}>Supprimer</button>
+          </div>
+        )) : <div className="empty">Aucune dépense</div>}
+      </div>
+
+      <h4 style={{marginTop:16}}>Détail mensuel</h4>
+      <div className="card" style={{padding:12}}>
+        {summary.series?.length? summary.series.map(s=> (
+          <div key={s.month} className="row" style={{justifyContent:'space-between', borderBottom:'1px solid #eee', padding:'6px 0'}}>
+            <div className="small">Mois {s.month}</div>
+            <div className="small">Revenus: <strong>{s.revenue} €</strong></div>
+            <div className="small">Dépenses: <strong>{s.expenses} €</strong></div>
+            <div className="small">Net: <strong>{s.net} €</strong></div>
+          </div>
+        )) : <div className="empty">Aucune donnée</div>}
+      </div>
+    </section>
   )
 }
 
@@ -507,6 +659,7 @@ export default function Admin(){
     { id:'bookings', label:'Commandes', icon:<IconListDetails size={18}/> },
     { id:'payments', label:'Paiements', icon:<IconCreditCard size={18}/> },
     { id:'properties', label:'Logements', icon:<IconBuilding size={18}/> },
+    { id:'compta', label:'Compta', icon:<IconChartLine size={18}/> },
   ]
   return (
     <div>
@@ -552,6 +705,7 @@ export default function Admin(){
       {tab==='bookings' && <Bookings />}
       {tab==='payments' && <Payments />}
       {tab==='properties' && <Properties />}
+      {tab==='compta' && <Compta />}
     </div>
   )
 }
