@@ -42,7 +42,16 @@ app.use(session({
 
 // CORS (allow frontend hosted on another domain like Vercel)
 app.use((req, res, next) => {
-  res.setHeader('Access-Control-Allow-Origin', process.env.CORS_ORIGIN || '*');
+  const allow = (process.env.CORS_ORIGIN || '*').split(',').map(s => s.trim()).filter(Boolean);
+  const origin = req.headers.origin || '';
+  const norm = s => String(s || '').replace(/\/$/, '');
+  const allowed = allow.includes('*') || allow.some(a => norm(a) === norm(origin));
+  if (allowed && origin) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
+  } else if (allow.includes('*')) {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  }
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (req.method === 'OPTIONS') return res.sendStatus(204);
