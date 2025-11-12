@@ -17,24 +17,13 @@ export default function PropertyDetails(){
   useEffect(()=>{
     (async()=>{
       try{
-        const { data: prop, error: e1 } = await supabase.from('properties').select('*').eq('id', id).single()
-        if (e1) throw e1
-        const property = prop && {
-          id: prop.id,
-          title: prop.title,
-          description: prop.description,
-          address: prop.address,
-          pricePerNight: prop.pricepernight,
-          imageUrl: prop.imageurl,
-          videoUrl: prop.videourl,
-          capacity: prop.capacity,
-          createdAt: prop.createdat,
-          availableFrom: prop.available_from,
-          availableTo: prop.available_to,
-        }
+        const r = await fetch(`/api/properties/${id}`)
+        if (!r.ok) throw new Error('Property not found')
+        const property = await r.json()
         setP(property)
-        const { data: m } = await supabase.from('property_media').select('*').eq('propertyid', id).order('position', { ascending:true })
-        setMedia(m||[])
+        const rm = await fetch(`/api/properties/${id}/media`)
+        const items = await rm.json().catch(()=>[])
+        setMedia(Array.isArray(items)? items: [])
       }catch(e){ setError(e.message) }
       finally{ setLoading(false) }
     })()

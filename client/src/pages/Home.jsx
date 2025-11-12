@@ -23,21 +23,10 @@ export default function Home(){
           setUserEmail(email)
         }catch{}
 
-        const { data, error } = await supabase.from('properties').select('*').order('createdat', { ascending: false })
-        if (error) throw new Error(error.message)
-        let list = (data||[]).map(d => ({
-          id: d.id,
-          title: d.title,
-          description: d.description,
-          address: d.address,
-          pricePerNight: d.pricepernight,
-          imageUrl: d.imageurl,
-          videoUrl: d.videourl,
-          capacity: d.capacity,
-          createdAt: d.createdat,
-          availableFrom: d.available_from,
-          availableTo: d.available_to,
-        }))
+        const res = await fetch('/api/properties')
+        if (!res.ok) throw new Error('Failed to load properties')
+        let list = await res.json()
+        list = Array.isArray(list)? list: []
         // Fetch reviews to compute avg rating and count for each property
         const ids = list.map(p=>p.id).filter(Boolean)
         if (ids.length){

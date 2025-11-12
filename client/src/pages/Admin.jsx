@@ -375,31 +375,23 @@ function Properties(){
   const [loading, setLoading] = useState(true)
   const [form, setForm] = useState({ title:'', pricePerNight:'', capacity:'', address:'', imageUrl:'', videoUrl:'', description:'' })
   const [av, setAv] = useState({ start:'', end:'' })
+  const [open, setOpen] = useState(false)
+  const [current, setCurrent] = useState(null)
   async function uploadAndSet(file, key){
     if (!file){ alert('Choisissez un fichier'); return }
-    const ext = file.name.split('.').pop() || ''
-    const path = `uploads/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
-    const { error } = await supabase.storage.from('media').upload(path, file, { contentType: file.type, upsert: false })
-    if (error){ alert('Upload échoué: '+error.message); return }
-    const { data } = supabase.storage.from('media').getPublicUrl(path)
-    setForm(f=>({...f, [key]: data.publicUrl }))
+    const fd = new FormData()
+    fd.append('file', file)
+    const res = await fetch('/api/upload', { method:'POST', body: fd })
+    if (!res.ok){ alert('Upload échoué'); return }
+    const json = await res.json().catch(()=>null)
+    if (!json?.url){ alert('Upload échoué'); return }
+    setForm(f=>({...f, [key]: json.url }))
   }
   async function load(){
-    const { data, error } = await supabase.from('properties').select('*').order('createdat', { ascending:false })
-    const list = (data||[]).map(d => ({
-      id: d.id,
-      title: d.title,
-      description: d.description,
-      address: d.address,
-      pricePerNight: d.pricepernight,
-      imageUrl: d.imageurl,
-      videoUrl: d.videourl,
-      capacity: d.capacity,
-      createdAt: d.createdat,
-      availableFrom: d.available_from,
-      availableTo: d.available_to,
-    }))
-    setItems(list); setLoading(false)
+    const res = await fetch('/api/properties')
+    const list = await res.json().catch(()=>[])
+    setItems(Array.isArray(list)? list: [])
+    setLoading(false)
   }
   useEffect(()=>{ load() },[])
   async function onSubmit(e){
@@ -408,16 +400,20 @@ function Properties(){
       title: form.title,
       description: form.description || '',
       address: form.address || '',
-      pricepernight: Number(form.pricePerNight) || 0,
-      imageurl: form.imageUrl || '',
-      videourl: form.videoUrl || '',
+      pricePerNight: Number(form.pricePerNight) || 0,
+      imageUrl: form.imageUrl || '',
+      videoUrl: form.videoUrl || '',
       capacity: Number(form.capacity) || 1,
-      available_from: av.start || null,
-      available_to: av.end || null,
-      createdat: new Date().toISOString(),
+      availableFrom: av.start || null,
+      availableTo: av.end || null,
     }
-    const { data: created, error } = await supabase.from('properties').insert(payload).select('*').single()
-    if (error){ alert('Erreur ajout logement: '+error.message); return }
+    const res = await fetch('/api/properties', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) })
+    if (!res.ok){
+      let msg = 'Erreur ajout logement'
+      try{ const j = await res.json(); if (j?.error) msg += ': '+j.error }catch{}
+      alert(msg); return
+    }
+    await res.json().catch(()=>null)
     setForm({ title:'', pricePerNight:'', capacity:'', address:'', imageUrl:'', videoUrl:'', description:'' })
     setAv({ start:'', end:'' })
     await load()
@@ -449,13 +445,41 @@ function Properties(){
         <button className="btn">Ajouter</button>
       </form>
       <section className="card" style={{padding:16}}>
-        <h3>Logements</h3>
-        {loading? <div className="empty">Chargement...</div> : (
-          items.length? items.map(p => (
-            <AdminPropertyItem key={p.id} p={p} onUpdated={load} onDeleted={load} />
-          )) : <div className="empty">Aucun logement pour le moment</div>
+        <h3 style={{marginTop:0}}>Logements</h3>
+        {loading? (
+          <div className="empty">Chargement...</div>
+        ) : items.length? (
+          <div className="grid" style={{gridTemplateColumns:'repeat(auto-fit,minmax(240px,1fr))', gap:12}}>
+            {items.map(p => (
+              <div key={p.id} className="card clickable" style={{overflow:'hidden'}} onClick={()=>{ setCurrent(p); setOpen(true) }}>
+                {p.imageUrl ? (
+                  <img src={p.imageUrl} alt="" style={{width:'100%', height:140, objectFit:'cover'}} />
+                ) : (
+                  <div style={{width:'100%', height:140, background:'#f3f4f6'}} />
+                )}
+                <div style={{padding:12}}>
+                  <div style={{fontWeight:700, marginBottom:4}}>{p.title}</div>
+                  <div className="small muted" style={{marginBottom:6}}>{p.address||'—'}</div>
+                  <div className="row between" style={{alignItems:'center'}}>
+                    <div className="small"><strong>{p.pricePerNight} €</strong><span className="muted">/nuit</span></div>
+                    {p.availableFrom && p.availableTo ? (
+                      <span className="badge">{p.availableFrom} → {p.availableTo}</span>
+                    ) : <span className="badge" style={{opacity:.6}}>Dispo non définie</span>}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="empty">Aucun logement pour le moment</div>
         )}
       </section>
+
+      <Modal open={open} onClose={()=>setOpen(false)} title={current? current.title : 'Logement'} width={800}>
+        {current && (
+          <AdminPropertyItem key={current.id} p={current} onUpdated={async()=>{ await load(); setOpen(false) }} onDeleted={async()=>{ await load(); setOpen(false) }} />
+        )}
+      </Modal>
     </section>
   )
 }

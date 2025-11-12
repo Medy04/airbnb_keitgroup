@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import Sortable from 'sortablejs'
-import { supabase } from '../lib/supabase.js'
 import DateRangeInputs from './DateRangeInputs.jsx'
 import { useToast } from './ToastProvider.jsx'
 
@@ -13,7 +12,9 @@ export default function AdminPropertyItem({ p, onUpdated, onDeleted }){
     address: p.address || '',
     imageUrl: p.imageUrl || '',
     videoUrl: p.videoUrl || '',
-    description: p.description || ''
+    description: p.description || '',
+    availableFrom: p.availableFrom || '',
+    availableTo: p.availableTo || ''
   })
   const [ranges, setRanges] = useState([])
   const [loadingRanges, setLoadingRanges] = useState(true)
@@ -23,19 +24,19 @@ export default function AdminPropertyItem({ p, onUpdated, onDeleted }){
 
   async function loadBlocked(){
     setLoadingRanges(true)
-    const [{ data: bookings }, { data: unav }] = await Promise.all([
-      supabase.from('bookings').select('startdate,enddate,status').eq('propertyid', p.id).in('status', ['pending','paying','finalized']),
-      supabase.from('availability').select('id,startdate,enddate').eq('propertyid', p.id)
-    ])
-    const arr = []
-    ;(bookings||[]).forEach(b=> arr.push({ startDate: b.startdate, endDate: b.enddate, source:'booking' }))
-    ;(unav||[]).forEach(r=> arr.push({ id: r.id, startDate: r.startdate, endDate: r.enddate, source:'unavailable' }))
-    setRanges(arr)
+    try{
+      const r = await fetch(`/api/properties/${p.id}/blocked`)
+      const ranges = await r.json().catch(()=>[])
+      setRanges(Array.isArray(ranges)? ranges: [])
+    }catch{ setRanges([]) }
     setLoadingRanges(false)
   }
   async function loadMedia(){
-    const { data, error } = await supabase.from('property_media').select('*').eq('propertyid', p.id).order('position', { ascending: true })
-    setMedia(data||[])
+    try{
+      const r = await fetch(`/api/properties/${p.id}/media`)
+      const items = await r.json().catch(()=>[])
+      setMedia(Array.isArray(items)? items: [])
+    }catch{ setMedia([]) }
   }
   useEffect(()=>{ loadBlocked(); loadMedia(); },[p.id])
 
@@ -46,10 +47,8 @@ export default function AdminPropertyItem({ p, onUpdated, onDeleted }){
       animation: 150,
       ghostClass: 'drag-ghost',
       onEnd: async () => {
-        const order = Array.from(mediaListRef.current.children).map((ch, idx) => ({ id: ch.dataset.id, pos: idx+1})).filter(x=>x.id)
-        for (const it of order){
-          await supabase.from('property_media').update({ position: it.pos }).eq('id', it.id).eq('propertyid', p.id)
-        }
+        const order = Array.from(mediaListRef.current.children).map(ch => ch.dataset.id).filter(Boolean)
+        await fetch(`/api/properties/${p.id}/media/reorder`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ order }) })
       }
     })
   }, [media])
@@ -61,20 +60,22 @@ export default function AdminPropertyItem({ p, onUpdated, onDeleted }){
       title: form.title,
       description: form.description,
       address: form.address,
-      pricepernight: Number(form.pricePerNight)||0,
-      imageurl: form.imageUrl,
-      videourl: form.videoUrl,
+      pricePerNight: Number(form.pricePerNight)||0,
+      imageUrl: form.imageUrl,
+      videoUrl: form.videoUrl,
       capacity: Number(form.capacity)||1,
+      availableFrom: form.availableFrom || null,
+      availableTo: form.availableTo || null,
     }
-    const { error } = await supabase.from('properties').update(updates).eq('id', p.id)
-    if (error){ toast.error('Erreur mise à jour: '+error.message); return }
+    const res = await fetch(`/api/properties/${p.id}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(updates) })
+    if (!res.ok){ toast.error('Erreur mise à jour'); return }
     toast.success('Logement mis à jour')
     onUpdated?.()
   }
   async function del(){
     if (!confirm('Supprimer ce logement ?')) return
-    const { error } = await supabase.from('properties').delete().eq('id', p.id)
-    if (error){ toast.error('Erreur suppression'); return }
+    const res = await fetch(`/api/properties/${p.id}`, { method:'DELETE' })
+    if (!res.ok){ toast.error('Erreur suppression'); return }
     toast.success('Logement supprimé')
     onDeleted?.()
   }
@@ -83,15 +84,15 @@ export default function AdminPropertyItem({ p, onUpdated, onDeleted }){
     const start = av.start?.trim()
     const end = av.end?.trim()
     if (!start || !end) { toast.error('Sélectionnez une période'); return }
-    const { error } = await supabase.from('availability').insert({ propertyid: p.id, startdate: start, enddate: end })
-    if (error){ toast.error('Ajout indisponible échoué: '+error.message); return }
+    const res = await fetch(`/api/properties/${p.id}/availability`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ startDate: start, endDate: end }) })
+    if (!res.ok){ toast.error('Ajout indisponible échoué'); return }
     toast.success('Période bloquée')
     setAv({ start:'', end:'' })
     await loadBlocked()
   }
   async function removeUnavailable(rangeId){
-    const { error } = await supabase.from('availability').delete().eq('id', rangeId).eq('propertyid', p.id)
-    if (error){ toast.error('Suppression échouée'); return }
+    const res = await fetch(`/api/properties/${p.id}/availability/${rangeId}`, { method:'DELETE' })
+    if (!res.ok){ toast.error('Suppression échouée'); return }
     toast.success('Période retirée')
     await loadBlocked()
   }
@@ -99,25 +100,26 @@ export default function AdminPropertyItem({ p, onUpdated, onDeleted }){
   async function uploadAndSet(input, key){
     const file = input?.files?.[0]
     if (!file){ toast.error('Choisissez un fichier'); return }
-    const ext = file.name.split('.').pop() || ''
-    const path = `uploads/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
-    const { error } = await supabase.storage.from('media').upload(path, file, { contentType: file.type, upsert:false })
-    if (error){ toast.error('Upload échoué: '+error.message); return }
-    const { data } = supabase.storage.from('media').getPublicUrl(path)
-    setForm(f=>({...f, [key]: data.publicUrl }))
+    const fd = new FormData()
+    fd.append('file', file)
+    const res = await fetch('/api/upload', { method:'POST', body: fd })
+    if (!res.ok){ toast.error('Upload échoué'); return }
+    const json = await res.json().catch(()=>null)
+    if (!json?.url){ toast.error('Upload échoué'); return }
+    setForm(f=>({...f, [key]: json.url }))
     toast.success('Media uploadé')
   }
   async function addMedia(type){
     const url = (type==='image'? form.imageUrl : form.videoUrl) || ''
     if (!url){ toast.error('Renseignez une URL ou uploadez avant'); return }
-    const { error } = await supabase.from('property_media').insert({ propertyid: p.id, url, type })
-    if (error){ toast.error('Ajout media échoué'); return }
+    const res = await fetch(`/api/properties/${p.id}/media`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ url, type }) })
+    if (!res.ok){ toast.error('Ajout media échoué'); return }
     toast.success('Média ajouté à la galerie')
     await loadMedia()
   }
   async function removeMedia(id){
-    const { error } = await supabase.from('property_media').delete().eq('id', id).eq('propertyid', p.id)
-    if (error){ toast.error('Suppression media échouée'); return }
+    const res = await fetch(`/api/properties/${p.id}/media/${id}`, { method:'DELETE' })
+    if (!res.ok){ toast.error('Suppression media échouée'); return }
     toast.success('Média supprimé')
     await loadMedia()
   }
@@ -137,6 +139,11 @@ export default function AdminPropertyItem({ p, onUpdated, onDeleted }){
         <input className="input" value={form.videoUrl} onChange={e=>setForm(f=>({...f,videoUrl:e.target.value}))} placeholder="Vidéo URL" />
       </div>
       <textarea className="input" value={form.description} onChange={e=>setForm(f=>({...f,description:e.target.value}))} />
+
+      <hr style={{opacity:.2, margin:'12px 0'}}/>
+      <div className="muted small" style={{marginBottom:6}}>Fenêtre de disponibilité (affichée sur le site)</div>
+      <DateRangeInputs start={form.availableFrom} end={form.availableTo} onChange={({start,end})=>setForm(f=>({...f, availableFrom:start, availableTo:end }))} />
+
       <div className="row">
         <input type="file" accept="image/*" onChange={e=>uploadAndSet(e.target, 'imageUrl')} />
         <button type="button" className="btn" onClick={()=>addMedia('image')}>Ajouter à la galerie</button>
