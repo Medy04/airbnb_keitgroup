@@ -529,18 +529,19 @@ function Properties(){
   const [av, setAv] = useState({ start:'', end:'' })
   const [open, setOpen] = useState(false)
   const [current, setCurrent] = useState(null)
+  const API = import.meta.env.VITE_API_BASE || ''
   async function uploadAndSet(file, key){
     if (!file){ alert('Choisissez un fichier'); return }
     const fd = new FormData()
     fd.append('file', file)
-    const res = await fetch('/api/upload', { method:'POST', body: fd })
+    const res = await fetch(`${API}/api/upload`, { method:'POST', body: fd })
     if (!res.ok){ alert('Upload échoué'); return }
     const json = await res.json().catch(()=>null)
     if (!json?.url){ alert('Upload échoué'); return }
     setForm(f=>({...f, [key]: json.url }))
   }
   async function load(){
-    const res = await fetch('/api/properties')
+    const res = await fetch(`${API}/api/properties`)
     const list = await res.json().catch(()=>[])
     setItems(Array.isArray(list)? list: [])
     setLoading(false)
@@ -559,7 +560,7 @@ function Properties(){
       availableFrom: av.start || null,
       availableTo: av.end || null,
     }
-    const res = await fetch('/api/properties', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) })
+    const res = await fetch(`${API}/api/properties`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) })
     if (!res.ok){
       let msg = 'Erreur ajout logement'
       try{ const j = await res.json(); if (j?.error) msg += ': '+j.error }catch{}

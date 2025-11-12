@@ -5,6 +5,7 @@ import { useToast } from './ToastProvider.jsx'
 
 export default function AdminPropertyItem({ p, onUpdated, onDeleted }){
   const toast = useToast()
+  const API = import.meta.env.VITE_API_BASE || ''
   const [form, setForm] = useState({
     title: p.title || '',
     pricePerNight: p.pricePerNight || 0,
@@ -25,16 +26,16 @@ export default function AdminPropertyItem({ p, onUpdated, onDeleted }){
   async function loadBlocked(){
     setLoadingRanges(true)
     try{
-      const r = await fetch(`/api/properties/${p.id}/blocked`)
-      const ranges = await r.json().catch(()=>[])
+      const res = await fetch(`${API}/api/properties/${p.id}/blocked`)
+      const ranges = await res.json().catch(()=>[])
       setRanges(Array.isArray(ranges)? ranges: [])
     }catch{ setRanges([]) }
     setLoadingRanges(false)
   }
   async function loadMedia(){
     try{
-      const r = await fetch(`/api/properties/${p.id}/media`)
-      const items = await r.json().catch(()=>[])
+      const res = await fetch(`${API}/api/properties/${p.id}/media`)
+      const items = await res.json().catch(()=>[])
       setMedia(Array.isArray(items)? items: [])
     }catch{ setMedia([]) }
   }
@@ -48,7 +49,7 @@ export default function AdminPropertyItem({ p, onUpdated, onDeleted }){
       ghostClass: 'drag-ghost',
       onEnd: async () => {
         const order = Array.from(mediaListRef.current.children).map(ch => ch.dataset.id).filter(Boolean)
-        await fetch(`/api/properties/${p.id}/media/reorder`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ order }) })
+        await fetch(`${API}/api/properties/${p.id}/media/reorder`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ order }) })
       }
     })
   }, [media])
@@ -67,14 +68,14 @@ export default function AdminPropertyItem({ p, onUpdated, onDeleted }){
       availableFrom: form.availableFrom || null,
       availableTo: form.availableTo || null,
     }
-    const res = await fetch(`/api/properties/${p.id}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(updates) })
+    const res = await fetch(`${API}/api/properties/${p.id}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(updates) })
     if (!res.ok){ toast.error('Erreur mise à jour'); return }
     toast.success('Logement mis à jour')
     onUpdated?.()
   }
   async function del(){
     if (!confirm('Supprimer ce logement ?')) return
-    const res = await fetch(`/api/properties/${p.id}`, { method:'DELETE' })
+    const res = await fetch(`${API}/api/properties/${p.id}`, { method:'DELETE' })
     if (!res.ok){ toast.error('Erreur suppression'); return }
     toast.success('Logement supprimé')
     onDeleted?.()
@@ -84,14 +85,14 @@ export default function AdminPropertyItem({ p, onUpdated, onDeleted }){
     const start = av.start?.trim()
     const end = av.end?.trim()
     if (!start || !end) { toast.error('Sélectionnez une période'); return }
-    const res = await fetch(`/api/properties/${p.id}/availability`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ startDate: start, endDate: end }) })
+    const res = await fetch(`${API}/api/properties/${p.id}/availability`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ startDate: av.start, endDate: av.end }) })
     if (!res.ok){ toast.error('Ajout indisponible échoué'); return }
     toast.success('Période bloquée')
     setAv({ start:'', end:'' })
     await loadBlocked()
   }
   async function removeUnavailable(rangeId){
-    const res = await fetch(`/api/properties/${p.id}/availability/${rangeId}`, { method:'DELETE' })
+    const res = await fetch(`${API}/api/properties/${p.id}/availability/${rangeId}`, { method:'DELETE' })
     if (!res.ok){ toast.error('Suppression échouée'); return }
     toast.success('Période retirée')
     await loadBlocked()
@@ -102,7 +103,7 @@ export default function AdminPropertyItem({ p, onUpdated, onDeleted }){
     if (!file){ toast.error('Choisissez un fichier'); return }
     const fd = new FormData()
     fd.append('file', file)
-    const res = await fetch('/api/upload', { method:'POST', body: fd })
+    const res = await fetch(`${API}/api/upload`, { method:'POST', body: fd })
     if (!res.ok){ toast.error('Upload échoué'); return }
     const json = await res.json().catch(()=>null)
     if (!json?.url){ toast.error('Upload échoué'); return }
@@ -112,13 +113,13 @@ export default function AdminPropertyItem({ p, onUpdated, onDeleted }){
   async function addMedia(type){
     const url = (type==='image'? form.imageUrl : form.videoUrl) || ''
     if (!url){ toast.error('Renseignez une URL ou uploadez avant'); return }
-    const res = await fetch(`/api/properties/${p.id}/media`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ url, type }) })
+    const res = await fetch(`${API}/api/properties/${p.id}/media`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ url, type }) })
     if (!res.ok){ toast.error('Ajout media échoué'); return }
     toast.success('Média ajouté à la galerie')
     await loadMedia()
   }
   async function removeMedia(id){
-    const res = await fetch(`/api/properties/${p.id}/media/${id}`, { method:'DELETE' })
+    const res = await fetch(`${API}/api/properties/${p.id}/media/${id}`, { method:'DELETE' })
     if (!res.ok){ toast.error('Suppression media échouée'); return }
     toast.success('Média supprimé')
     await loadMedia()
