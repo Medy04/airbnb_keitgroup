@@ -34,30 +34,31 @@ function Compta(){
   const [expenses, setExpenses] = useState([])
   const [expForm, setExpForm] = useState({ propertyId:'', date:'', amount:'', label:'' })
   const [loading, setLoading] = useState(false)
+  const API = import.meta.env.VITE_API_BASE || ''
 
   async function loadSummary(){
     setLoading(true)
     try{
       const params = new URLSearchParams({ year: String(year) })
       if (month) params.set('month', String(month))
-      const res = await fetch(`/api/finance/summary?${params.toString()}`)
+      const res = await fetch(`${API}/api/finance/summary?${params.toString()}`)
       const data = await res.json().catch(()=>({ series:[], totals:{revenue:0,expenses:0,net:0} }))
       setSummary(data)
     } finally{ setLoading(false) }
   }
   async function loadSeries(){
     const qs = new URLSearchParams({ from, to })
-    const res = await fetch(`/api/finance/revenue-series?${qs.toString()}`)
+    const res = await fetch(`${API}/api/finance/revenue-series?${qs.toString()}`)
     const data = await res.json().catch(()=>({ points: [] }))
     setPoints(data.points||[])
   }
   async function loadProps(){
-    const res = await fetch('/api/properties')
+    const res = await fetch(`${API}/api/properties`)
     setProperties(await res.json().catch(()=>[]))
   }
   async function loadExpenses(){
     const qs = new URLSearchParams({ from, to })
-    const res = await fetch(`/api/expenses?${qs.toString()}`)
+    const res = await fetch(`${API}/api/expenses?${qs.toString()}`)
     setExpenses(await res.json().catch(()=>[]))
   }
   useEffect(()=>{ loadProps() },[])
@@ -72,14 +73,14 @@ function Compta(){
       amount: Number(expForm.amount)||0,
       label: expForm.label||''
     }
-    const res = await fetch('/api/expenses', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) })
+    const res = await fetch(`${API}/api/expenses`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) })
     if (!res.ok){ alert('Erreur ajout dépense'); return }
     setExpForm({ propertyId:'', date:'', amount:'', label:'' })
     await loadExpenses(); await loadSummary()
   }
   async function deleteExpense(id){
     if (!confirm('Supprimer cette dépense ?')) return
-    const res = await fetch(`/api/expenses/${id}`, { method:'DELETE' })
+    const res = await fetch(`${API}/api/expenses/${id}`, { method:'DELETE' })
     if (!res.ok){ alert('Erreur suppression'); return }
     await loadExpenses(); await loadSummary()
   }
