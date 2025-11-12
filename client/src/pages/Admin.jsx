@@ -48,7 +48,7 @@ function Compta(){
   }
   async function loadSeries(){
     const qs = new URLSearchParams({ from, to })
-    const res = await fetch(`${API}/api/finance/revenue-series?${qs.toString()}`)
+    const res = await fetch(`${API}/api/finance/series?${qs.toString()}`)
     const data = await res.json().catch(()=>({ points: [] }))
     setPoints(data.points||[])
   }
@@ -85,20 +85,63 @@ function Compta(){
     await loadExpenses(); await loadSummary()
   }
 
-  // Build simple line chart with SVG from points
+  // Build multi-line chart (revenue=blue, expenses=red, net=green) with light smoothing
   const chart = (()=>{
     const data = points||[]
     if (!data.length) return null
-    const w=600, h=200, pad=24
-    const maxY = Math.max(...data.map(p=>p.revenue), 1)
+    const w=720, h=260, pad=32
+    const maxY = Math.max(1, ...data.map(p=> Math.max(p.revenue||0, p.expenses||0, p.net||0)))
     const stepX = (w - pad*2) / Math.max(1, data.length-1)
     const toX = i => pad + i*stepX
     const toY = v => h - pad - (v/maxY)*(h - pad*2)
-    const d = data.map((p,i)=> `${i?'L':'M'}${toX(i)},${toY(p.revenue)}`).join(' ')
+    const makePath = (arr, key) => {
+      if (!arr.length) return ''
+      // simple Catmull-Rom to Bezier smoothing
+      const pts = arr.map((p,i)=> [toX(i), toY(p[key]||0)])
+      if (pts.length<2) return `M${pts[0][0]},${pts[0][1]}`
+      let d = `M${pts[0][0]},${pts[0][1]}`
+      for (let i=0;i<pts.length-1;i++){
+        const p0 = pts[i-1] || pts[i]
+        const p1 = pts[i]
+        const p2 = pts[i+1]
+        const p3 = pts[i+2] || p2
+        const smoothing = 0.2
+        const cp1x = p1[0] + (p2[0]-p0[0]) * smoothing
+        const cp1y = p1[1] + (p2[1]-p0[1]) * smoothing
+        const cp2x = p2[0] - (p3[0]-p1[0]) * smoothing
+        const cp2y = p2[1] - (p3[1]-p1[1]) * smoothing
+        d += ` C${cp1x},${cp1y} ${cp2x},${cp2y} ${p2[0]},${p2[1]}`
+      }
+      return d
+    }
+    const pathRevenue = makePath(data, 'revenue')
+    const pathExpenses = makePath(data, 'expenses')
+    const pathNet = makePath(data, 'net')
     return (
-      <svg width={w} height={h} style={{width:'100%', maxWidth:600, background:'#fafafa', borderRadius:8}}>
-        <polyline fill="none" stroke="#3b82f6" strokeWidth="2" points={data.map((p,i)=>`${toX(i)},${toY(p.revenue)}`).join(' ')} />
-        <path d={d} fill="none" stroke="#3b82f6" strokeWidth="2" />
+      <svg width={w} height={h} style={{width:'100%', maxWidth:720, background:'#ffffff', border:'1px solid #eee', borderRadius:8}}>
+        <g>
+          {data.map((p,i)=> (
+            <text key={i} x={toX(i)} y={h-6} fontSize="10" textAnchor="middle" fill="#6b7280">{p.period}</text>
+          ))}
+        </g>
+        <path d={pathRevenue} fill="none" stroke="#3b82f6" strokeWidth="2.5" />
+        <path d={pathExpenses} fill="none" stroke="#ef4444" strokeWidth="2.5" />
+        <path d={pathNet} fill="none" stroke="#10b981" strokeWidth="2.5" />
+        {data.map((p,i)=> (
+          <g key={`dots-${i}`}>
+            <circle cx={toX(i)} cy={toY(p.revenue||0)} r="3" fill="#3b82f6" />
+            <circle cx={toX(i)} cy={toY(p.expenses||0)} r="3" fill="#ef4444" />
+            <circle cx={toX(i)} cy={toY(p.net||0)} r="3" fill="#10b981" />
+          </g>
+        ))}
+        <g>
+          <rect x={pad} y={pad-24} width="12" height="3" fill="#3b82f6" rx="1" />
+          <text x={pad+18} y={pad-20} fontSize="12" fill="#111827">Revenus</text>
+          <rect x={pad+90} y={pad-24} width="12" height="3" fill="#ef4444" rx="1" />
+          <text x={pad+108} y={pad-20} fontSize="12" fill="#111827">Dépenses</text>
+          <rect x={pad+180} y={pad-24} width="12" height="3" fill="#10b981" rx="1" />
+          <text x={pad+198} y={pad-20} fontSize="12" fill="#111827">Net</text>
+        </g>
       </svg>
     )
   })()

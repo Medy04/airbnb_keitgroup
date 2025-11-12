@@ -58,6 +58,52 @@ app.use((req, res, next) => {
   next();
 });
 
+// Finance - Combined series (revenue, expenses, net) by month for a date range
+// Query: from=YYYY-MM-DD&to=YYYY-MM-DD
+app.get('/api/finance/series', async (req, res) => {
+  try{
+    const from = req.query.from;
+    const to = req.query.to;
+    if (!from || !to) return res.status(400).json({ error: 'from and to are required' });
+    const [{ data: bookings, error: bErr }, { data: expenses, error: eErr }] = await Promise.all([
+      supabase
+        .from('bookings')
+        .select('startdate,total,status')
+        .eq('status','finalized')
+        .gte('startdate', from)
+        .lte('startdate', to),
+      supabase
+        .from('expenses')
+        .select('date,amount')
+        .gte('date', from)
+        .lte('date', to)
+    ])
+    if (bErr) return res.status(500).json({ error: bErr.message })
+    if (eErr) return res.status(500).json({ error: eErr.message })
+    // group by YYYY-MM
+    const agg = {}
+    const keyOf = d => {
+      const dt = new Date(d)
+      return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth()+1).padStart(2,'0')}`
+    }
+    // seed keys for all months between from/to
+    const start = new Date(from+ 'T00:00:00Z')
+    const end = new Date(to+ 'T00:00:00Z')
+    const cur = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), 1))
+    const last = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), 1))
+    while (cur <= last){
+      const k = `${cur.getUTCFullYear()}-${String(cur.getUTCMonth()+1).padStart(2,'0')}`
+      agg[k] = { period:k, revenue:0, expenses:0, net:0 }
+      cur.setUTCMonth(cur.getUTCMonth()+1)
+    }
+    ;(bookings||[]).forEach(b=>{ const k = keyOf(b.startdate); if (!agg[k]) agg[k]={period:k,revenue:0,expenses:0,net:0}; agg[k].revenue += Number(b.total)||0 })
+    ;(expenses||[]).forEach(x=>{ const k = keyOf(x.date); if (!agg[k]) agg[k]={period:k,revenue:0,expenses:0,net:0}; agg[k].expenses += Number(x.amount)||0 })
+    Object.values(agg).forEach(row=>{ row.net = (row.revenue||0) - (row.expenses||0) })
+    const points = Object.keys(agg).sort().map(k=> agg[k])
+    res.json({ from, to, points })
+  } catch(e){ res.status(500).json({ error: 'Failed to compute series' }) }
+});
+
 // Make session available to EJS views
 app.use((req, res, next) => { res.locals.session = req.session || {}; next(); });
 
